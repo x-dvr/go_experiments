@@ -97,16 +97,28 @@ func MergeBatch4[T any](inputs ...<-chan T) <-chan T {
 
 	// create data transfer goroutine for each 4 input channels
 	for i := range gCount {
-		go select4(wg, outCh, inputs[i*4], inputs[i*4+1], inputs[i*4+2], inputs[i*4+3])
+		go select4(wg, outCh,
+			inputs[i*4],
+			inputs[i*4+1],
+			inputs[i*4+2],
+			inputs[i*4+3],
+		)
 	}
 
 	switch leftovers {
 	case 3:
 		wg.Add(1)
-		go select3(wg, outCh, inputs[inputCount-3], inputs[inputCount-2], inputs[inputCount-1])
+		go select3(wg, outCh,
+			inputs[inputCount-3],
+			inputs[inputCount-2],
+			inputs[inputCount-1],
+		)
 	case 2:
 		wg.Add(1)
-		go select2(wg, outCh, inputs[inputCount-2], inputs[inputCount-1])
+		go select2(wg, outCh,
+			inputs[inputCount-2],
+			inputs[inputCount-1],
+		)
 	case 1:
 		wg.Add(1)
 		go read(wg, outCh, inputs[inputCount-1])

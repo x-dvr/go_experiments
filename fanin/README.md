@@ -20,19 +20,19 @@ goos: linux
 goarch: amd64
 pkg: github.com/x-dvr/go_experiments/fanin
 cpu: Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
-BenchmarkWorkerPoolCanonical-16                    39284             30863 ns/op            1030 B/op         16 allocs/op
-BenchmarkWorkerPoolReflect-16                       3283            338913 ns/op          269879 B/op       4016 allocs/op
-BenchmarkWorkerPoolLoop-16                         18078             66086 ns/op            1024 B/op         16 allocs/op
-BenchmarkWorkerPoolBatch4-16                       22622             52930 ns/op            1027 B/op         16 allocs/op
-BenchmarkWorkerPoolBatch2-16                       29120             41008 ns/op            1025 B/op         16 allocs/op
-BenchmarkMetricsCanonical-16                        4431            267459 ns/op            6502 B/op        100 allocs/op
-BenchmarkMetricsReflect-16                           124           9595376 ns/op         7369241 B/op     104129 allocs/op
-BenchmarkMetricsLoop-16                             5350            208171 ns/op            6464 B/op        100 allocs/op
-BenchmarkMetricsBatch4-16                           3693            310419 ns/op            6416 B/op        100 allocs/op
-BenchmarkMetricsBatch2-16                           3896            300377 ns/op            6422 B/op        100 allocs/op
-BenchmarkHugeSourceCountCanonical-16                  27          42910864 ns/op           88452 B/op       1086 allocs/op
-BenchmarkHugeSourceCountReflect-16                     1        12611724803 ns/op       6944206800 B/op 100402478 allocs/op
-BenchmarkHugeSourceCountBatch4-16                     37          27370017 ns/op         1028057 B/op      14562 allocs/op
-BenchmarkHugeSourceCountBatch2-16                     32          38751360 ns/op           66124 B/op       1022 allocs/op
-BenchmarkHugeSourceCountLoop-16                       69          17088617 ns/op           65779 B/op       1018 allocs/op
+BenchmarkWorkerPoolCanonical-16                    33226             35925 ns/op             780 B/op         16 allocs/op
+BenchmarkWorkerPoolReflect-16                       4495            246157 ns/op          174897 B/op       3216 allocs/op
+BenchmarkWorkerPoolLoop-16                         12849             93811 ns/op             770 B/op         16 allocs/op
+BenchmarkWorkerPoolBatch4-16                       24518             48428 ns/op             769 B/op         16 allocs/op
+BenchmarkWorkerPoolBatch2-16                       26648             44263 ns/op             769 B/op         16 allocs/op
+BenchmarkMetricsCanonical-16                        4347            265471 ns/op            4891 B/op        100 allocs/op
+BenchmarkMetricsReflect-16                           124           9567865 ns/op         7367975 B/op     104133 allocs/op
+BenchmarkMetricsLoop-16                             5588            205936 ns/op            4885 B/op        101 allocs/op
+BenchmarkMetricsBatch4-16                           3796            307656 ns/op            4828 B/op        100 allocs/op
+BenchmarkMetricsBatch2-16                           3993            298389 ns/op            4813 B/op        100 allocs/op
+BenchmarkHugeSourceCountCanonical-16                 300           3988277 ns/op           50906 B/op       1015 allocs/op
+BenchmarkHugeSourceCountReflect-16                     1        1254595024 ns/op        694566576 B/op  10042435 allocs/op
+BenchmarkHugeSourceCountBatch4-16                    433           2691683 ns/op          130797 B/op       2163 allocs/op
+BenchmarkHugeSourceCountBatch2-16                    351           3441153 ns/op           48658 B/op       1006 allocs/op
+BenchmarkHugeSourceCountLoop-16                      825           1447144 ns/op           48899 B/op       1009 allocs/op
 ```
