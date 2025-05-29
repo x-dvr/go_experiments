@@ -1,127 +1,248 @@
 package fanin_test
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/x-dvr/go_experiments/fanin"
 )
 
-func TestMergeGoChanInt(t *testing.T) {
-	ch := prepare(100, 100)
-	out := fanin.MergeGoChan(ch...)
+func TestCanonical(t *testing.T) {
+	srcCount := 2
+	msgCount := 10
+	w, r := setupSources(srcCount, makeBuffered[int](1))
+
+	out := fanin.MergeCanonical(r...)
+
+	send(w, msgCount, func(i int) int { return i })
+
 	sum := 0
-	for v := range out {
+	for i := 0; i < msgCount; i++ {
+		v := <-out
 		sum += v
 	}
-	if sum != 495000 {
-		t.Errorf("got wrong value: %d, expected: %d", sum, 495000)
+
+	if sum != 45 {
+		t.Errorf("got wrong value: %d, expected: %d", sum, 45)
+	}
+
+	closeAll(w)
+
+	cnt := 0
+	for range out {
+		cnt += 1
+	}
+	if cnt > 0 {
+		t.Errorf("received more messages than sent: %d messages", cnt)
 	}
 }
 
-func TestMergeLoopIterInt(t *testing.T) {
-	ch := prepare(100, 100)
-	out := fanin.MergeLoopIter(ch...)
+func TestReflect(t *testing.T) {
+	srcCount := 2
+	msgCount := 10
+	w, r := setupSources(srcCount, makeBuffered[int](1))
+
+	out := fanin.MergeReflect(r...)
+
+	send(w, msgCount, func(i int) int { return i })
+
 	sum := 0
-	for v := range out {
+	for i := 0; i < msgCount; i++ {
+		v := <-out
 		sum += v
 	}
-	if sum != 495000 {
-		t.Errorf("got wrong value: %d, expected: %d", sum, 495000)
+
+	if sum != 45 {
+		t.Errorf("got wrong value: %d, expected: %d", sum, 45)
+	}
+
+	closeAll(w)
+
+	cnt := 0
+	for range out {
+		cnt += 1
+	}
+	if cnt > 0 {
+		t.Errorf("received more messages than sent: %d messages", cnt)
 	}
 }
 
-func TestMergeReflectChanInt(t *testing.T) {
-	ch := prepare(100, 100)
-	out := fanin.MergeReflectChan(ch...)
-	sum := 0
-	for v := range out {
-		sum += v
-	}
-	if sum != 495000 {
-		t.Errorf("got wrong value: %d, expected: %d", sum, 495000)
-	}
-}
+func TestLoop(t *testing.T) {
+	srcCount := 2
+	msgCount := 10
+	w, r := setupSources(srcCount, makeBuffered[int](1))
 
-func TestMergeReflectIterInt(t *testing.T) {
-	ch := prepare(100, 100)
-	out := fanin.MergeReflectIter(ch...)
+	out := fanin.MergeLoop(r...)
+
+	send(w, msgCount, func(i int) int { return i })
+
 	sum := 0
-	for v := range out {
+	for i := 0; i < msgCount; i++ {
+		v := <-out
 		sum += v
 	}
-	if sum != 495000 {
-		t.Errorf("got wrong value: %d, expected: %d", sum, 495000)
+
+	if sum != 45 {
+		t.Errorf("got wrong value: %d, expected: %d", sum, 45)
+	}
+
+	closeAll(w)
+
+	cnt := 0
+	for range out {
+		cnt += 1
+	}
+	if cnt > 0 {
+		t.Errorf("received more messages than sent: %d messages", cnt)
 	}
 }
 
 var sink int
+var rSink Result
 
-func BenchmarkMergeGoChanInt(b *testing.B) {
-	ch := prepare(1_000, 2_000)
-	out := fanin.MergeGoChan(ch...)
+func BenchmarkMetricsCanonical(b *testing.B) {
+	srcCount := 100
+	msgCount := 100
+	w, r := setupSources(srcCount, makeBuffered[int](1))
+
+	out := fanin.MergeCanonical(r...)
+
 	for b.Loop() {
-		sum := 0
-		for v := range out {
-			sum += v
-		}
-		sink = sum
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkMetricsReflect(b *testing.B) {
+	srcCount := 100
+	msgCount := 100
+	w, r := setupSources(srcCount, makeBuffered[int](1))
+
+	out := fanin.MergeReflect(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkMetricsLoop(b *testing.B) {
+	srcCount := 100
+	msgCount := 100
+	w, r := setupSources(srcCount, makeBuffered[int](1))
+
+	out := fanin.MergeLoop(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkWorkerPoolCanonical(b *testing.B) {
+	srcCount := runtime.NumCPU()
+	msgCount := 200
+	w, r := setupSources(srcCount, makeBuffered[Result](100))
+
+	out := fanin.MergeCanonical(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) Result { return Result{Val: i} })
+		rSink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkWorkerPoolReflect(b *testing.B) {
+	srcCount := runtime.NumCPU()
+	msgCount := 200
+	w, r := setupSources(srcCount, makeBuffered[Result](100))
+
+	out := fanin.MergeReflect(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) Result { return Result{Val: i} })
+		rSink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkWorkerPoolLoop(b *testing.B) {
+	srcCount := runtime.NumCPU()
+	msgCount := 200
+	w, r := setupSources(srcCount, makeBuffered[Result](100))
+
+	out := fanin.MergeLoop(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) Result { return Result{Val: i} })
+		rSink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+type Result struct {
+	Err error
+	Val int
+}
+
+type MakeSource[T any] func() chan T
+
+func makeBuffered[T any](size int) MakeSource[T] {
+	return func() chan T {
+		return make(chan T, size)
 	}
 }
 
-func BenchmarkMergeLoopIterInt(b *testing.B) {
-	ch := prepare(1_000, 2_000)
-	out := fanin.MergeLoopIter(ch...)
-	for b.Loop() {
-		sum := 0
-		for v := range out {
-			sum += v
-		}
-		sink = sum
+func setupSources[T any](srcCount int, makeSource MakeSource[T]) ([]chan<- T, []<-chan T) {
+	writable := make([]chan<- T, srcCount)
+	readable := make([]<-chan T, srcCount)
+	for idx := range srcCount {
+		ch := makeSource()
+		writable[idx] = ch
+		readable[idx] = ch
+	}
+
+	return writable, readable
+}
+
+func closeAll[T any](ch []chan<- T) {
+	for _, c := range ch {
+		close(c)
 	}
 }
 
-func BenchmarkMergeReflectChanInt(b *testing.B) {
-	ch := prepare(100, 950)
-	out := fanin.MergeReflectChan(ch...)
-	for b.Loop() {
-		sum := 0
-		for v := range out {
-			sum += v
+func send[T any](ch []chan<- T, count int, makeValue func(int) T) {
+	goroutineCount := len(ch)
+	// amount of messages sent by each goroutine
+	batchSize := count / (goroutineCount - 1)
+	lastBatch := count - batchSize*(goroutineCount-1)
+	for i := range goroutineCount {
+		size := batchSize
+		if i == goroutineCount-1 {
+			size = lastBatch
 		}
-		sink = sum
-	}
-}
-
-func BenchmarkMergeReflectIterInt(b *testing.B) {
-	ch := prepare(100, 950)
-	out := fanin.MergeReflectIter(ch...)
-	for b.Loop() {
-		sum := 0
-		for v := range out {
-			sum += v
-		}
-		sink = sum
-	}
-}
-
-func prepare(countCh int, countMsg int) []<-chan int {
-	chans := make([]chan int, countCh)
-	for idx := range chans {
-		chans[idx] = make(chan int)
-	}
-	tmp := make([]<-chan int, countCh)
-	for idx := range chans {
-		tmp[idx] = chans[idx]
-	}
-
-	for i := 0; i < countCh; i++ {
 		go func() {
-			for j := 0; j < countMsg; j++ {
-				chans[i] <- j
+			for k := range size {
+				ch[i] <- makeValue(k)
 			}
-			close(chans[i])
 		}()
 	}
+}
 
-	return tmp
+func read[T any](ch <-chan T, count int) T {
+	var sink T
+	for i := 0; i < count; i++ {
+		sink = <-ch
+	}
+	return sink
 }

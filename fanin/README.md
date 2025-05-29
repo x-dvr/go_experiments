@@ -4,7 +4,13 @@ More details [here](http://example.com)
 
 Run benchmarks:
 ```sh
-go test -bench=. -benchmem
+# run all benchmarks
+go test -bench=. -benchmem ./fanin
+
+# profile one benchmark
+go test -bench=^BenchmarkMetricsReflect$ -benchmem ./fanin -memprofile memprofile.out -cpuprofile profile.out
+# show profile
+go tool pprof -web profile.out
 ```
 
 ## Results
@@ -14,7 +20,10 @@ goos: linux
 goarch: amd64
 pkg: github.com/x-dvr/go_experiments/fanin
 cpu: Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
-BenchmarkMergeGoChanInt-16              67580131                17.68 ns/op            0 B/op          0 allocs/op
-BenchmarkMergeReflectChanInt-16         59583638                19.28 ns/op            1 B/op          0 allocs/op
-BenchmarkMergeReflectIterInt-16         15597328                69.38 ns/op           44 B/op          3 allocs/op
+BenchmarkMetricsCanonical-16               23522             51153 ns/op            6418 B/op        100 allocs/op
+BenchmarkMetricsReflect-16                  1198            967134 ns/op          744086 B/op      10517 allocs/op
+BenchmarkMetricsLoop-16                    14046             86055 ns/op            6400 B/op        100 allocs/op
+BenchmarkWorkerPoolCanonical-16            38960             31365 ns/op            1024 B/op         16 allocs/op
+BenchmarkWorkerPoolReflect-16               3234            342429 ns/op          269864 B/op       4016 allocs/op
+BenchmarkWorkerPoolLoop-16                 18076             66331 ns/op            1024 B/op         16 allocs/op
 ```
