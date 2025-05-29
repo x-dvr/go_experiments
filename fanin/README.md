@@ -10,7 +10,7 @@ go test -bench=. -benchmem ./fanin
 # profile one benchmark
 go test -bench=^BenchmarkMetricsReflect$ -benchmem ./fanin -memprofile memprofile.out -cpuprofile profile.out
 # show profile
-go tool pprof -web profile.out
+go tool pprof -web memprofile.out
 ```
 
 ## Results
