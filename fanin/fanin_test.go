@@ -8,8 +8,8 @@ import (
 )
 
 func TestCanonical(t *testing.T) {
-	srcCount := 2
-	msgCount := 10
+	srcCount := 5
+	msgCount := 20
 	w, r := setupSources(srcCount, makeBuffered[int](1))
 
 	out := fanin.MergeCanonical(r...)
@@ -22,8 +22,8 @@ func TestCanonical(t *testing.T) {
 		sum += v
 	}
 
-	if sum != 45 {
-		t.Errorf("got wrong value: %d, expected: %d", sum, 45)
+	if sum != 40 {
+		t.Errorf("got wrong value: %d, expected: %d", sum, 40)
 	}
 
 	closeAll(w)
@@ -38,8 +38,8 @@ func TestCanonical(t *testing.T) {
 }
 
 func TestReflect(t *testing.T) {
-	srcCount := 2
-	msgCount := 10
+	srcCount := 5
+	msgCount := 20
 	w, r := setupSources(srcCount, makeBuffered[int](1))
 
 	out := fanin.MergeReflect(r...)
@@ -52,8 +52,8 @@ func TestReflect(t *testing.T) {
 		sum += v
 	}
 
-	if sum != 45 {
-		t.Errorf("got wrong value: %d, expected: %d", sum, 45)
+	if sum != 40 {
+		t.Errorf("got wrong value: %d, expected: %d", sum, 40)
 	}
 
 	closeAll(w)
@@ -68,8 +68,8 @@ func TestReflect(t *testing.T) {
 }
 
 func TestLoop(t *testing.T) {
-	srcCount := 2
-	msgCount := 10
+	srcCount := 5
+	msgCount := 20
 	w, r := setupSources(srcCount, makeBuffered[int](1))
 
 	out := fanin.MergeLoop(r...)
@@ -82,8 +82,68 @@ func TestLoop(t *testing.T) {
 		sum += v
 	}
 
-	if sum != 45 {
-		t.Errorf("got wrong value: %d, expected: %d", sum, 45)
+	if sum != 40 {
+		t.Errorf("got wrong value: %d, expected: %d", sum, 40)
+	}
+
+	closeAll(w)
+
+	cnt := 0
+	for range out {
+		cnt += 1
+	}
+	if cnt > 0 {
+		t.Errorf("received more messages than sent: %d messages", cnt)
+	}
+}
+
+func TestBatch4(t *testing.T) {
+	srcCount := 5
+	msgCount := 20
+	w, r := setupSources(srcCount, makeBuffered[int](1))
+
+	out := fanin.MergeBatch4(r...)
+
+	send(w, msgCount, func(i int) int { return i })
+
+	sum := 0
+	for i := 0; i < msgCount; i++ {
+		v := <-out
+		sum += v
+	}
+
+	if sum != 40 {
+		t.Errorf("got wrong value: %d, expected: %d", sum, 40)
+	}
+
+	closeAll(w)
+
+	cnt := 0
+	for range out {
+		cnt += 1
+	}
+	if cnt > 0 {
+		t.Errorf("received more messages than sent: %d messages", cnt)
+	}
+}
+
+func TestBatch2(t *testing.T) {
+	srcCount := 5
+	msgCount := 20
+	w, r := setupSources(srcCount, makeBuffered[int](1))
+
+	out := fanin.MergeBatch2(r...)
+
+	send(w, msgCount, func(i int) int { return i })
+
+	sum := 0
+	for i := 0; i < msgCount; i++ {
+		v := <-out
+		sum += v
+	}
+
+	if sum != 40 {
+		t.Errorf("got wrong value: %d, expected: %d", sum, 40)
 	}
 
 	closeAll(w)
@@ -99,51 +159,6 @@ func TestLoop(t *testing.T) {
 
 var sink int
 var rSink Result
-
-func BenchmarkMetricsCanonical(b *testing.B) {
-	srcCount := 100
-	msgCount := 100
-	w, r := setupSources(srcCount, makeBuffered[int](1))
-
-	out := fanin.MergeCanonical(r...)
-
-	for b.Loop() {
-		send(w, msgCount, func(i int) int { return i })
-		sink = read(out, msgCount)
-	}
-
-	closeAll(w)
-}
-
-func BenchmarkMetricsReflect(b *testing.B) {
-	srcCount := 100
-	msgCount := 100
-	w, r := setupSources(srcCount, makeBuffered[int](1))
-
-	out := fanin.MergeReflect(r...)
-
-	for b.Loop() {
-		send(w, msgCount, func(i int) int { return i })
-		sink = read(out, msgCount)
-	}
-
-	closeAll(w)
-}
-
-func BenchmarkMetricsLoop(b *testing.B) {
-	srcCount := 100
-	msgCount := 100
-	w, r := setupSources(srcCount, makeBuffered[int](1))
-
-	out := fanin.MergeLoop(r...)
-
-	for b.Loop() {
-		send(w, msgCount, func(i int) int { return i })
-		sink = read(out, msgCount)
-	}
-
-	closeAll(w)
-}
 
 func BenchmarkWorkerPoolCanonical(b *testing.B) {
 	srcCount := runtime.NumCPU()
@@ -185,6 +200,186 @@ func BenchmarkWorkerPoolLoop(b *testing.B) {
 	for b.Loop() {
 		send(w, msgCount, func(i int) Result { return Result{Val: i} })
 		rSink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkWorkerPoolBatch4(b *testing.B) {
+	srcCount := runtime.NumCPU()
+	msgCount := 200
+	w, r := setupSources(srcCount, makeBuffered[Result](100))
+
+	out := fanin.MergeBatch4(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) Result { return Result{Val: i} })
+		rSink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkWorkerPoolBatch2(b *testing.B) {
+	srcCount := runtime.NumCPU()
+	msgCount := 200
+	w, r := setupSources(srcCount, makeBuffered[Result](100))
+
+	out := fanin.MergeBatch2(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) Result { return Result{Val: i} })
+		rSink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkMetricsCanonical(b *testing.B) {
+	srcCount := 100
+	msgCount := 1000
+	w, r := setupSources(srcCount, makeBuffered[int](5))
+
+	out := fanin.MergeCanonical(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkMetricsReflect(b *testing.B) {
+	srcCount := 100
+	msgCount := 1000
+	w, r := setupSources(srcCount, makeBuffered[int](5))
+
+	out := fanin.MergeReflect(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkMetricsLoop(b *testing.B) {
+	srcCount := 100
+	msgCount := 1000
+	w, r := setupSources(srcCount, makeBuffered[int](5))
+
+	out := fanin.MergeLoop(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkMetricsBatch4(b *testing.B) {
+	srcCount := 100
+	msgCount := 1000
+	w, r := setupSources(srcCount, makeBuffered[int](5))
+
+	out := fanin.MergeBatch4(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkMetricsBatch2(b *testing.B) {
+	srcCount := 100
+	msgCount := 1000
+	w, r := setupSources(srcCount, makeBuffered[int](5))
+
+	out := fanin.MergeBatch2(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkHugeSourceCountCanonical(b *testing.B) {
+	srcCount := 1000
+	msgCount := 100000
+	w, r := setupSources(srcCount, makeBuffered[int](10))
+
+	out := fanin.MergeCanonical(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkHugeSourceCountReflect(b *testing.B) {
+	srcCount := 1000
+	msgCount := 100000
+	w, r := setupSources(srcCount, makeBuffered[int](10))
+
+	out := fanin.MergeReflect(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkHugeSourceCountBatch4(b *testing.B) {
+	srcCount := 1000
+	msgCount := 100000
+	w, r := setupSources(srcCount, makeBuffered[int](10))
+
+	out := fanin.MergeBatch4(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkHugeSourceCountBatch2(b *testing.B) {
+	srcCount := 1000
+	msgCount := 100000
+	w, r := setupSources(srcCount, makeBuffered[int](10))
+
+	out := fanin.MergeBatch2(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
+	}
+
+	closeAll(w)
+}
+
+func BenchmarkHugeSourceCountLoop(b *testing.B) {
+	srcCount := 1000
+	msgCount := 100000
+	w, r := setupSources(srcCount, makeBuffered[int](10))
+
+	out := fanin.MergeLoop(r...)
+
+	for b.Loop() {
+		send(w, msgCount, func(i int) int { return i })
+		sink = read(out, msgCount)
 	}
 
 	closeAll(w)
