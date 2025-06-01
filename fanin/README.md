@@ -13,6 +13,13 @@ go test -bench=^BenchmarkMetricsReflect$ -benchmem ./fanin -memprofile memprofil
 go tool pprof -web memprofile.out
 ```
 
+Measure CPU usage:
+```sh
+perf stat go test -bench=^BenchmarkWorkerPoolCanonical$ -benchtime=20s ./fanin
+perf stat go test -bench=^BenchmarkWorkerPoolLoop$ -benchtime=10s ./fanin
+
+```
+
 ## Results
 
 ```
