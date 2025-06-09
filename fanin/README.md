@@ -1,6 +1,6 @@
 # Experiment with different fan-in implementations
 
-More details [here](http://example.com)
+More details [here](https://x-dvr.github.io/dev-blog/posts/compare-fan-in/)
 
 Run benchmarks:
 ```sh
