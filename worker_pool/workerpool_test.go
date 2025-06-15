@@ -17,14 +17,14 @@ var (
 	PoolCap  int = runtime.NumCPU() - 1
 )
 
-// var sink int
+var sink int
 
 func workHard(calcTo int) {
 	var n2, n1 = 0, 1
 	for i := 2; i <= calcTo; i++ {
 		n2, n1 = n1, n1+n2
 	}
-	// sink = n1
+	sink = n1
 }
 
 type worker struct {
@@ -79,7 +79,7 @@ func BenchmarkErrGroup(b *testing.B) {
 func BenchmarkAntsPool(b *testing.B) {
 	var wg sync.WaitGroup
 	w := worker{wg: &wg}
-	pool, _ := ants.NewPool(PoolCap)
+	pool, _ := ants.NewPool(PoolCap, ants.WithPreAlloc(true))
 
 	for b.Loop() {
 		wg.Add(RunTimes)

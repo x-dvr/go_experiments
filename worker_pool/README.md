@@ -8,7 +8,7 @@ Run benchmarks:
 go test -bench=. -benchmem -benchtime=10s ./worker_pool
 
 # profile one benchmark
-go test ./worker_pool -bench=^BenchmarkPreallocPool$ -benchmem -memprofile memprofile.out -cpuprofile profile.out
+go test ./worker_pool -bench=^BenchmarkNoPool$ -benchmem -memprofile memprofile.out -cpuprofile profile.out
 # show profile
 go tool pprof -web memprofile.out
 ```
@@ -27,11 +27,13 @@ goos: linux
 goarch: amd64
 pkg: github.com/x-dvr/go_experiments/worker_pool
 cpu: Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
-BenchmarkNoPool-16                   328          36454247 ns/op         1619652 B/op     100041 allocs/op
-BenchmarkErrGroup-16                 166          80118816 ns/op         4000030 B/op     200000 allocs/op
-BenchmarkAntsPool-16                 202          58806556 ns/op         1603005 B/op     100031 allocs/op
-BenchmarkSemaphorePool-16            152          78665797 ns/op         4000003 B/op     200000 allocs/op
-BenchmarkPreallocPool-16             306          39126920 ns/op         1600001 B/op     100000 allocs/op
-BenchmarkStaticPool-16               304          39326183 ns/op               1 B/op          0 allocs/op
-BenchmarkRoundRobinPool-16           348          34369560 ns/op               1 B/op          0 allocs/op
+BenchmarkNoPool-16                   277          43122852 ns/op         1648003 B/op     100099 allocs/op
+BenchmarkErrGroup-16                 148          69116382 ns/op         4000014 B/op     200000 allocs/op
+BenchmarkAntsPool-16                 183          64860110 ns/op         1602015 B/op     100020 allocs/op
+BenchmarkSemaphorePool-16            152          78712478 ns/op         4000004 B/op     200000 allocs/op
+BenchmarkPreallocPool-16             254          47502297 ns/op         1600002 B/op     100000 allocs/op
+BenchmarkStaticPool-16               248          48050947 ns/op               2 B/op          0 allocs/op
+BenchmarkRoundRobinPool-16           271          44089732 ns/op               2 B/op          0 allocs/op
+PASS
+ok      github.com/x-dvr/go_experiments/worker_pool     90.093s
 ```
