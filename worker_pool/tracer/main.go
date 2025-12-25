@@ -16,7 +16,7 @@ const (
 )
 
 var (
-	PoolCap int   = runtime.NumCPU() - 1
+	PoolCap int   = runtime.NumCPU() * 2
 	sink    []int = make([]int, RunTimes)
 )
 
@@ -26,6 +26,10 @@ func main() {
 		panic(err)
 	}
 	err = traceFn("rr", robinPool)
+	if err != nil {
+		panic(err)
+	}
+	err = traceFn("st", staticPool)
 	if err != nil {
 		panic(err)
 	}
@@ -58,9 +62,20 @@ func noPool() {
 }
 
 func robinPool() {
-	pool := workerpool.NewRRPool(func(ct, i int) {
+	pool := workerpool.NewARRPool(func(ct, i int) {
 		sink[i] = workHard(ct)
 	}, int64(PoolCap))
+	for i := range RunTimes {
+		pool.Go(CalcTo, i)
+	}
+	pool.Release()
+	pool.Wait()
+}
+
+func staticPool() {
+	pool := workerpool.NewStaticPool(func(ct, i int) {
+		sink[i] = workHard(ct)
+	}, PoolCap)
 	for i := range RunTimes {
 		pool.Go(CalcTo, i)
 	}

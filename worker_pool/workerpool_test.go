@@ -18,7 +18,7 @@ const (
 )
 
 var (
-	PoolCap int   = runtime.NumCPU()
+	PoolCap int   = runtime.NumCPU() * 2
 	sink    []int = make([]int, RunTimes)
 )
 
