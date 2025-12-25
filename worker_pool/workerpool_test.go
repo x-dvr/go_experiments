@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/panjf2000/ants/v2"
 	"golang.org/x/sync/errgroup"
@@ -11,147 +12,128 @@ import (
 	workerpool "github.com/x-dvr/go_experiments/worker_pool"
 )
 
-var (
-	CalcTo   int = 1e4
-	RunTimes int = 1e5
-	PoolCap  int = runtime.NumCPU() - 1
+const (
+	CalcTo   int = 1e5
+	RunTimes int = 1e4
 )
 
-var sink int
+var (
+	PoolCap int   = runtime.NumCPU()
+	sink    []int = make([]int, RunTimes)
+)
 
-func workHard(calcTo int) {
+func workHard(calcTo int) int {
 	var n2, n1 = 0, 1
 	for i := 2; i <= calcTo; i++ {
 		n2, n1 = n1, n1+n2
 	}
-	sink = n1
-}
-
-type worker struct {
-	wg *sync.WaitGroup
-}
-
-func (w worker) Work() {
-	workHard(CalcTo)
-	w.wg.Done()
-}
-
-func (w worker) WorkTo(to int) {
-	workHard(to)
-	w.wg.Done()
-}
-
-func (w worker) WorkErr() error {
-	workHard(CalcTo)
-	w.wg.Done()
-	return nil
+	return n1
 }
 
 func BenchmarkNoPool(b *testing.B) {
 	var wg sync.WaitGroup
-	w := worker{wg: &wg}
-
 	for b.Loop() {
-		wg.Add(RunTimes)
-		for j := 0; j < RunTimes; j++ {
-			go w.Work()
+		for i := range RunTimes {
+			wg.Go(func() {
+				sink[i] = workHard(CalcTo)
+			})
 		}
 		wg.Wait()
+	}
+}
+
+func BenchmarkRoundAlignedRobinPool(b *testing.B) {
+	for b.Loop() {
+		pool := workerpool.NewARRPool(func(ct, iter int) {
+			sink[iter] = workHard(ct)
+		}, int64(PoolCap))
+		for i := range RunTimes {
+			pool.Go(CalcTo, i)
+		}
+		pool.Release()
+		pool.Wait()
 	}
 }
 
 func BenchmarkErrGroup(b *testing.B) {
-	var wg sync.WaitGroup
 	var pool errgroup.Group
-	w := worker{wg: &wg}
 	pool.SetLimit(PoolCap)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		wg.Add(RunTimes)
-		for j := 0; j < RunTimes; j++ {
-			pool.Go(w.WorkErr)
+	for b.Loop() {
+		for i := range RunTimes {
+			pool.Go(func() error {
+				sink[i] = workHard(CalcTo)
+				return nil
+			})
 		}
-		wg.Wait()
+		pool.Wait()
 	}
 }
 
 func BenchmarkAntsPool(b *testing.B) {
-	var wg sync.WaitGroup
-	w := worker{wg: &wg}
 	pool, _ := ants.NewPool(PoolCap, ants.WithPreAlloc(true))
 
 	for b.Loop() {
-		wg.Add(RunTimes)
-		for j := 0; j < RunTimes; j++ {
-			pool.Submit(w.Work)
+		pool.Reboot()
+		for i := range RunTimes {
+			pool.Submit(func() {
+				sink[i] = workHard(CalcTo)
+			})
 		}
-		wg.Wait()
+		pool.ReleaseTimeout(1 * time.Hour)
 	}
-
-	pool.Release()
 }
 
 func BenchmarkSemaphorePool(b *testing.B) {
-	var wg sync.WaitGroup
-	w := worker{wg: &wg}
 	pool := workerpool.NewSemaphorePool(PoolCap)
 
 	for b.Loop() {
-		wg.Add(RunTimes)
-		for j := 0; j < RunTimes; j++ {
-			pool.Go(w.Work)
+		for i := range RunTimes {
+			pool.Go(func() {
+				sink[i] = workHard(CalcTo)
+			})
 		}
-		wg.Wait()
+		pool.Wait()
 	}
 
 	pool.Release()
 }
 
 func BenchmarkPreallocPool(b *testing.B) {
-	var wg sync.WaitGroup
-	w := worker{wg: &wg}
-	pool := workerpool.NewPreallocPool(PoolCap, RunTimes)
-
 	for b.Loop() {
-		wg.Add(RunTimes)
-		for j := 0; j < RunTimes; j++ {
-			pool.Go(w.Work)
+		pool := workerpool.NewPreallocPool(PoolCap)
+		for i := range RunTimes {
+			pool.Go(func() {
+				sink[i] = workHard(CalcTo)
+			})
 		}
-		wg.Wait()
+		pool.Release()
+		pool.Wait()
 	}
-
-	pool.Release()
 }
 
 func BenchmarkStaticPool(b *testing.B) {
-	var wg sync.WaitGroup
-	w := worker{wg: &wg}
-	pool := workerpool.NewStaticPool(w.WorkTo, PoolCap, RunTimes)
-
 	for b.Loop() {
-		wg.Add(RunTimes)
-		for j := 0; j < RunTimes; j++ {
-			pool.Go(CalcTo)
+		pool := workerpool.NewStaticPool(func(ct, iter int) {
+			sink[iter] = workHard(ct)
+		}, PoolCap)
+		for i := range RunTimes {
+			pool.Go(CalcTo, i)
 		}
-		wg.Wait()
+		pool.Release()
+		pool.Wait()
 	}
-
-	pool.Release()
 }
 
 func BenchmarkRoundRobinPool(b *testing.B) {
-	var wg sync.WaitGroup
-	w := worker{wg: &wg}
-	pool := workerpool.NewRRPool(w.WorkTo, PoolCap, RunTimes)
-
 	for b.Loop() {
-		wg.Add(RunTimes)
-		for j := 0; j < RunTimes; j++ {
-			pool.Go(CalcTo)
+		pool := workerpool.NewRRPool(func(ct, iter int) {
+			sink[iter] = workHard(ct)
+		}, int64(PoolCap))
+		for i := range RunTimes {
+			pool.Go(CalcTo, i)
 		}
-		wg.Wait()
+		pool.Release()
+		pool.Wait()
 	}
-
-	pool.Release()
 }

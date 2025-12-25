@@ -1,4 +1,4 @@
-# Experiment with different fan-in implementations
+# Experiment with different worker pool implementations
 
 More details [here](http://example.com)
 
@@ -11,6 +11,11 @@ go test -bench=. -benchmem -benchtime=10s ./worker_pool
 go test ./worker_pool -bench=^BenchmarkNoPool$ -benchmem -memprofile memprofile.out -cpuprofile profile.out
 # show profile
 go tool pprof -web memprofile.out
+
+# trace one benchmark
+go test ./worker_pool -bench=^BenchmarkNoPool$ -trace=trace.out
+# show trace
+go tool trace trace.out
 ```
 
 Measure CPU usage:
