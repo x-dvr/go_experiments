@@ -24,6 +24,13 @@ perf stat go test -bench=^BenchmarkPreallocPool$ -benchtime=20s ./worker_pool
 perf stat go test -bench=^BenchmarkNoPool$ -benchtime=20s ./worker_pool
 
 ```
+Reduce memory allocations, so Go spends less CPU time and memory bandwidth on garbage collection
+Analyze heap profile with `go tool pprof -alloc_objects` - it shows the main sources of memory allocations
+Use sync.Pool for CPU-bound code
+
+Reduce the number of live objects with pointers in heap, so Go GC spends less CPU time and memory bandwidth on visiting pointers in these objects
+Analyze heap profile with `go tool pprof -inuse_objects` - it shows the main sources of live objects
+
 
 ## Results
 
