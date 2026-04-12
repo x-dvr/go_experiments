@@ -159,6 +159,8 @@ func TestBatch2(t *testing.T) {
 
 var sink int
 
+// runtime.KeepAlive(sink)
+
 func BenchmarkWorkerPoolCanonical(b *testing.B) {
 	srcCount := runtime.NumCPU()
 	msgCount := runtime.NumCPU() * 10
