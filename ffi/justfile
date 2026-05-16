@@ -1,0 +1,50 @@
+# FFI benchmark suite — CGO (dynamic + static) vs goffi (dynamic).
+# Run from the ffi/ directory: `just bench`.
+
+cc      := env_var_or_default("CC", "gcc")
+cflags  := "-O2 -fPIC -Wall -Wextra"
+src     := "c/ffilib.c"
+header  := "c/ffilib.h"
+libdir  := "lib"
+shared  := libdir / "libffilib.so"
+static  := libdir / "libffilib.a"
+obj     := libdir / "ffilib.o"
+
+default: build
+
+# Build both shared and static libraries.
+build: shared static
+
+# Shared (.so) — used by CGO/dynamic and goffi.
+shared:
+    @mkdir -p {{libdir}}
+    {{cc}} {{cflags}} -shared -o {{shared}} {{src}}
+
+# Static archive (.a) — used by CGO/static.
+static:
+    @mkdir -p {{libdir}}
+    {{cc}} {{cflags}} -c -o {{obj}} {{src}}
+    ar rcs {{static}} {{obj}}
+
+clean:
+    rm -f {{shared}} {{static}} {{obj}}
+    rm -rf {{libdir}}
+
+# Run every benchmark in the suite. Builds libs first.
+bench: build
+    go test -bench=. -benchmem -run=^$ ./cgo/dynamic/...
+    go test -bench=. -benchmem -run=^$ ./cgo/static/...
+    go test -bench=. -benchmem -run=^$ ./goffi/...
+
+bench-cgo-dynamic: shared
+    go test -bench=. -benchmem -run=^$ ./cgo/dynamic/...
+
+bench-cgo-static: static
+    go test -bench=. -benchmem -run=^$ ./cgo/static/...
+
+bench-goffi: shared
+    go test -bench=. -benchmem -run=^$ ./goffi/...
+
+# Sanity-check all packages compile and tests pass.
+test: build
+    go test ./cgo/dynamic/... ./cgo/static/... ./goffi/...
