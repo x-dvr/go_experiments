@@ -22,6 +22,15 @@ broken `buffer.go` is deleted.
    escapes per `Start` was *all* of `PoolChan`'s alloc count. With
    the direct `io.ReadFull(f, *buf)`, allocs/op drops from **1 009 to
    9** and B/op drops from 70 KiB to 18 KiB.
+
+   Why `*[]byte`, not plain `[]byte`? `sync.Pool.Put/Get` take/return
+   `any`, which is a `(type, data)` pair where `data` is one
+   pointer-sized word. A slice header is 24 bytes (ptr + len + cap),
+   so storing a `[]byte` makes the runtime heap-allocate a copy of
+   the slice header to back the `any` — one alloc per `Put`,
+   defeating the pool. `*[]byte` fits directly in the interface data
+   word, no boxing. Staticcheck flags the bad pattern as
+   [SA6002](https://staticcheck.dev/docs/checks/#SA6002).
 5. **`sync_test.go` — pooled buffers are now `Put` back** after the
    test reads them.
 6. **`buffer.go` deleted.** It was dead code with a broken `sync.Cond`

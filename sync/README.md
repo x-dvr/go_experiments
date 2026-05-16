@@ -45,5 +45,20 @@ variants converge to ~173–178 ms because the bottleneck is
 producer's read time exceeds the consumer's SHA-256 time, so the
 synchronisation primitive doesn't matter much.
 
+### Why `PoolChan` stores `*[]byte`, not `[]byte`
+
+`sync.Pool.Put/Get` take/return `any`, which is a `(type, data)` pair
+where `data` is one pointer-sized word. A slice header is 24 bytes
+(`ptr` + `len` + `cap`), so storing a `[]byte` forces the runtime to
+heap-allocate a copy of the slice header to back the `any` — one
+alloc per `Put`, defeating the pool entirely (you avoid one 64 KiB
+allocation but pay a 24 B slice-header allocation, and `allocs/op`
+still grows linearly with task count). `*[]byte` fits directly in
+the interface data word with no boxing.
+
+Staticcheck flags the wrong pattern as
+[SA6002](https://staticcheck.dev/docs/checks/#SA6002), and
+`sync.Pool`'s own docs recommend pointer types for this reason.
+
 See [analysis.md](analysis.md) for the full discussion of bugs found,
 fixes applied, and result interpretation.

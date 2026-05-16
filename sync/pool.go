@@ -7,9 +7,14 @@ import (
 	"sync"
 )
 
-// PoolChanProducer recycles fixed-size byte slices via sync.Pool. Buffers
-// are stored as *[]byte so the pool stores stable pointer-sized values
-// (sync.Pool optimises for pointer-typed entries).
+// PoolChanProducer recycles fixed-size byte slices via sync.Pool.
+//
+// Buffers are stored as *[]byte, not []byte. sync.Pool.Put/Get take/return
+// `any`, which is a (type, data) pair where `data` is one pointer-sized
+// word. A slice header is 24 bytes (ptr+len+cap), so storing a []byte
+// forces the runtime to heap-allocate a copy of the slice header to back
+// the `any` — one alloc per Put, defeating the pool. *[]byte fits in the
+// interface data word directly, no boxing. (See staticcheck SA6002.)
 type PoolChanProducer struct {
 	P sync.Pool
 }
