@@ -99,6 +99,31 @@ a `chan struct{}` permit semaphore, prealloc uses one shared
 its task slots (no per-task `g` allocation) — but the external
 `sync.WaitGroup` we added to drain each batch costs one alloc per task.
 
+#### Aside: is the external WaitGroup on AntsPool unfair?
+
+It's a reasonable concern — every other pool's `Drain()` uses an
+internal `sync.WaitGroup`, but ants doesn't expose one, so the bench
+wraps it externally. I checked three alternative drain strategies:
+
+| Strategy                          | sec/op     | B/op      |
+|-----------------------------------|------------|-----------|
+| External `sync.WaitGroup`         |  69.5 ms   | 234.9 KiB |
+| ants's `Reboot` + `ReleaseTimeout`|  74.0 ms   | 158.9 KiB |
+| Poll `pool.Running() > 0` + yield |   1.90  s  | 159.0 KiB |
+
+The external WG is the **fastest** of the three — ants's native
+`ReleaseTimeout`/`Reboot` idiom (the one the original README used) is
+slower because it internally polls for `Running() == 0` and tears
+down/re-initialises pool state every batch. The WG path is a direct
+signal/wait. Naive `Running()`-polling is catastrophic because the
+polling goroutine starves the workers it's waiting on.
+
+The WG does cost ~76 KiB extra allocations per iteration (the
+closure captures an additional `*sync.WaitGroup` field, ~8 B × 10 000),
+but the *alloc count* is identical and the per-task synchronisation
+shape — one atomic Add, one atomic Done, one Wait — matches what the
+Prealloc/Static/RR pools do internally. The comparison is fair.
+
 ### Why `SemaphorePool` is the slowest with the most allocs
 
 It pays *all* the costs at once: spawns a goroutine per task
