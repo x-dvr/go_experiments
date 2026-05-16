@@ -23,12 +23,11 @@ func TestPoolProducer(t *testing.T) {
 	p := sync.NewPoolProd()
 	ch := p.Start(10)
 	for b := range ch {
-		buf := b.Bytes()
-		if len(buf) != sync.S64k {
-			t.Errorf("Wrong buffer read: %d", len(buf))
+		if len(*b) != sync.S64k {
+			t.Errorf("Wrong buffer read: %d", len(*b))
 		}
+		p.P.Put(b)
 	}
-
 }
 
 func BenchmarkSeq(b *testing.B) {

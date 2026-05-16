@@ -1,13 +1,15 @@
 package sync
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"io"
 	"os"
 	"sync"
 )
 
+// PoolChanProducer recycles fixed-size byte slices via sync.Pool. Buffers
+// are stored as *[]byte so the pool stores stable pointer-sized values
+// (sync.Pool optimises for pointer-typed entries).
 type PoolChanProducer struct {
 	P sync.Pool
 }
@@ -16,15 +18,15 @@ func NewPoolProd() *PoolChanProducer {
 	return &PoolChanProducer{
 		P: sync.Pool{
 			New: func() any {
-				buf := make([]byte, 0, S64k)
-				return bytes.NewBuffer(buf)
+				b := make([]byte, S64k)
+				return &b
 			},
 		},
 	}
 }
 
-func (p *PoolChanProducer) Start(cnt int) <-chan *bytes.Buffer {
-	ch := make(chan *bytes.Buffer, 1)
+func (p *PoolChanProducer) Start(cnt int) <-chan *[]byte {
+	ch := make(chan *[]byte, 1)
 	go func() {
 		defer close(ch)
 		f, err := os.Open("/dev/urandom")
@@ -33,8 +35,9 @@ func (p *PoolChanProducer) Start(cnt int) <-chan *bytes.Buffer {
 		}
 		defer f.Close()
 		for range cnt {
-			buf := p.P.Get().(*bytes.Buffer)
-			if _, err := io.CopyN(buf, f, S64k); err != nil {
+			buf := p.P.Get().(*[]byte)
+			if _, err := io.ReadFull(f, *buf); err != nil {
+				p.P.Put(buf)
 				return
 			}
 			ch <- buf
@@ -43,13 +46,12 @@ func (p *PoolChanProducer) Start(cnt int) <-chan *bytes.Buffer {
 	return ch
 }
 
-func ConsumePooled(ch <-chan *bytes.Buffer, p *sync.Pool) int {
+func ConsumePooled(ch <-chan *[]byte, p *sync.Pool) int {
 	resCh := make(chan int)
 	go func() {
 		res := 0
 		for buf := range ch {
-			sum := sha256.Sum256(buf.Bytes())
-			buf.Reset()
+			sum := sha256.Sum256(*buf)
 			p.Put(buf)
 			for i := range len(sum) {
 				res += int(sum[i])

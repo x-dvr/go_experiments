@@ -30,6 +30,11 @@ func workHard(calcTo int) int {
 	return n1
 }
 
+// All pool constructions are hoisted outside b.Loop() so each iteration
+// measures only the submit-and-drain cost, not goroutine spawn / hchan
+// allocation. Drain() per iteration waits for all submitted tasks of the
+// current batch to complete without closing the input channel.
+
 func BenchmarkNoPool(b *testing.B) {
 	var wg sync.WaitGroup
 	for b.Loop() {
@@ -39,19 +44,6 @@ func BenchmarkNoPool(b *testing.B) {
 			})
 		}
 		wg.Wait()
-	}
-}
-
-func BenchmarkRoundAlignedRobinPool(b *testing.B) {
-	for b.Loop() {
-		pool := workerpool.NewARRPool(func(ct, iter int) {
-			sink[iter] = workHard(ct)
-		}, int64(PoolCap))
-		for i := range RunTimes {
-			pool.Go(CalcTo, i)
-		}
-		pool.Release()
-		pool.Wait()
 	}
 }
 
@@ -66,26 +58,30 @@ func BenchmarkErrGroup(b *testing.B) {
 				return nil
 			})
 		}
-		pool.Wait()
+		_ = pool.Wait()
 	}
 }
 
 func BenchmarkAntsPool(b *testing.B) {
 	pool, _ := ants.NewPool(PoolCap, ants.WithPreAlloc(true))
+	defer pool.ReleaseTimeout(1 * time.Hour)
 
+	var wg sync.WaitGroup
 	for b.Loop() {
-		pool.Reboot()
+		wg.Add(RunTimes)
 		for i := range RunTimes {
-			pool.Submit(func() {
+			_ = pool.Submit(func() {
 				sink[i] = workHard(CalcTo)
+				wg.Done()
 			})
 		}
-		pool.ReleaseTimeout(1 * time.Hour)
+		wg.Wait()
 	}
 }
 
 func BenchmarkSemaphorePool(b *testing.B) {
 	pool := workerpool.NewSemaphorePool(PoolCap)
+	defer pool.Release()
 
 	for b.Loop() {
 		for i := range RunTimes {
@@ -95,45 +91,46 @@ func BenchmarkSemaphorePool(b *testing.B) {
 		}
 		pool.Wait()
 	}
-
-	pool.Release()
 }
 
 func BenchmarkPreallocPool(b *testing.B) {
+	pool := workerpool.NewPreallocPool(PoolCap)
+	defer pool.Release()
+
 	for b.Loop() {
-		pool := workerpool.NewPreallocPool(PoolCap)
 		for i := range RunTimes {
 			pool.Go(func() {
 				sink[i] = workHard(CalcTo)
 			})
 		}
-		pool.Release()
-		pool.Wait()
+		pool.Drain()
 	}
 }
 
 func BenchmarkStaticPool(b *testing.B) {
+	pool := workerpool.NewStaticPool(func(ct, iter int) {
+		sink[iter] = workHard(ct)
+	}, PoolCap)
+	defer pool.Release()
+
 	for b.Loop() {
-		pool := workerpool.NewStaticPool(func(ct, iter int) {
-			sink[iter] = workHard(ct)
-		}, PoolCap)
 		for i := range RunTimes {
 			pool.Go(CalcTo, i)
 		}
-		pool.Release()
-		pool.Wait()
+		pool.Drain()
 	}
 }
 
 func BenchmarkRoundRobinPool(b *testing.B) {
+	pool := workerpool.NewRRPool(func(ct, iter int) {
+		sink[iter] = workHard(ct)
+	}, int64(PoolCap))
+	defer pool.Release()
+
 	for b.Loop() {
-		pool := workerpool.NewRRPool(func(ct, iter int) {
-			sink[iter] = workHard(ct)
-		}, int64(PoolCap))
 		for i := range RunTimes {
 			pool.Go(CalcTo, i)
 		}
-		pool.Release()
-		pool.Wait()
+		pool.Drain()
 	}
 }

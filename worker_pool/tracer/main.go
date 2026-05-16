@@ -62,14 +62,14 @@ func noPool() {
 }
 
 func robinPool() {
-	pool := workerpool.NewARRPool(func(ct, i int) {
+	pool := workerpool.NewRRPool(func(ct, i int) {
 		sink[i] = workHard(ct)
 	}, int64(PoolCap))
 	for i := range RunTimes {
 		pool.Go(CalcTo, i)
 	}
+	pool.Drain()
 	pool.Release()
-	pool.Wait()
 }
 
 func staticPool() {
@@ -79,8 +79,8 @@ func staticPool() {
 	for i := range RunTimes {
 		pool.Go(CalcTo, i)
 	}
+	pool.Drain()
 	pool.Release()
-	pool.Wait()
 }
 
 func workHard(calcTo int) int {

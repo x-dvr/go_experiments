@@ -3,22 +3,23 @@ package workerpool
 import "sync"
 
 type PreallocPool struct {
-	tasks chan Task
-	wg    sync.WaitGroup
+	tasks   chan Task
+	workers sync.WaitGroup
+	pending sync.WaitGroup
 }
 
-// check interface compliance
 var _ Pool = (*PreallocPool)(nil)
 
 func NewPreallocPool(cap int) *PreallocPool {
 	pool := PreallocPool{
-		tasks: make(chan Task, 1),
+		tasks: make(chan Task, cap),
 	}
 
 	for range cap {
-		pool.wg.Go(func() {
+		pool.workers.Go(func() {
 			for job := range pool.tasks {
 				job()
+				pool.pending.Done()
 			}
 		})
 	}
@@ -27,13 +28,15 @@ func NewPreallocPool(cap int) *PreallocPool {
 }
 
 func (p *PreallocPool) Go(w Task) {
+	p.pending.Add(1)
 	p.tasks <- w
+}
+
+func (p *PreallocPool) Drain() {
+	p.pending.Wait()
 }
 
 func (p *PreallocPool) Release() {
 	close(p.tasks)
-}
-
-func (p *PreallocPool) Wait() {
-	p.wg.Wait()
+	p.workers.Wait()
 }
