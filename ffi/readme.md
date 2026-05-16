@@ -44,30 +44,48 @@ The goffi suite has two flavors:
 ## Results
 
 `just bench` on Intel i7-10870H @ 2.20 GHz, Linux amd64, Go 1.25, gcc 16.1.1,
-`gcc -O2 -fPIC`. ns/op (lower = better), B/op, allocs/op.
+`gcc -O2 -fPIC`. Each benchmark run 10 times (`go test -count=10`),
+summarised with `benchstat` (median ± relative range). Allocation columns
+report the per-call B/op and allocs/op, which are deterministic.
 
 ### CGO (dynamic and static)
 
-| Benchmark           | CGO dynamic                | CGO static                 |
-|---------------------|----------------------------|----------------------------|
-| `AddInts`           |   30.66 ns,   0 B, 0 allocs|   31.32 ns,   0 B, 0 allocs|
-| `Strlen` (CString)  |  111.3  ns,   0 B, 0 allocs|  114.9  ns,   0 B, 0 allocs|
-| `Strlen` (no-copy)  |   64.76 ns,  24 B, 1 alloc |   65.35 ns,  24 B, 1 alloc |
-| `SumBytes`          |   39.43 ns,   0 B, 0 allocs|   38.88 ns,   0 B, 0 allocs|
-| `PointAdd`          |   35.28 ns,   0 B, 0 allocs|   35.34 ns,   0 B, 0 allocs|
-| `IntCallback`       |   80.53 ns,   0 B, 0 allocs|   79.96 ns,   0 B, 0 allocs|
-| `StructCallback`    |   80.27 ns,   0 B, 0 allocs|   81.02 ns,   0 B, 0 allocs|
+| Benchmark           | CGO dynamic               | CGO static                | B/op | allocs/op |
+|---------------------|---------------------------|---------------------------|-----:|----------:|
+| `AddInts`           |  30.99 ns ± 2%            |  30.87 ns ± 1%            |    0 |         0 |
+| `Strlen` (CString)  | 114.5  ns ± 2%            | 114.9  ns ± 1%            |    0 |         0 |
+| `Strlen` (no-copy)  |  65.48 ns ± 4%            |  69.20 ns ± 7%            |   24 |         1 |
+| `SumBytes`          |  40.14 ns ± 1%            |  39.57 ns ± 2%            |    0 |         0 |
+| `PointAdd`          |  35.86 ns ± 1%            |  35.43 ns ± 1%            |    0 |         0 |
+| `IntCallback`       |  80.78 ns ± 2%            |  81.20 ns ± 2%            |    0 |         0 |
+| `StructCallback`    |  82.14 ns ± 2%            |  80.99 ns ± 2%            |    0 |         0 |
+| geomean             |  58.04 ns                 |  58.20 ns                 |      |           |
 
 ### goffi (wrapped API vs raw idiomatic)
 
-| Benchmark         | Wrapped API                | Raw (hoisted argv/storage) |
-|-------------------|----------------------------|----------------------------|
-| `AddInts`         |  282.1 ns, 240 B, 3 allocs |  138.9 ns, 208 B, 1 alloc  |
-| `Strlen`          |  317.2 ns, 256 B, 5 allocs |  122.8 ns, 208 B, 1 alloc  |
-| `SumBytes`        |  296.1 ns, 248 B, 4 allocs |  188.4 ns, 208 B, 1 alloc  |
-| `PointAdd`        |  312.2 ns, 272 B, 5 allocs |  181.2 ns, 208 B, 1 alloc  |
-| `IntCallback`     |  573.7 ns, 288 B, 7 allocs |  507.3 ns, 248 B, 4 allocs |
-| `StructCallback`  |  739.1 ns, 304 B, 7 allocs |  690.8 ns, 256 B, 4 allocs |
+Run in isolation (`just bench-goffi`, cooler CPU):
+
+| Benchmark         | Wrapped API     | Raw (hoisted argv) | Wrap B/op | Wrap allocs | Raw B/op | Raw allocs |
+|-------------------|-----------------|--------------------|----------:|------------:|---------:|-----------:|
+| `AddInts`         | 187.5 ns ± 17%  | 147.6 ns ± 14%     |       240 |           3 |      208 |          1 |
+| `Strlen`          | 250.8 ns ± 18%  | 154.4 ns ± 18%     |       256 |           5 |      208 |          1 |
+| `SumBytes`        | 261.5 ns ± 36%  | 168.0 ns ± 26%     |       248 |           4 |      208 |          1 |
+| `PointAdd`        | 321.8 ns ± 31%  | 217.7 ns ± 29%     |       272 |           5 |      208 |          1 |
+| `IntCallback`     | 608.1 ns ±  4%  | 511.6 ns ±  3%     |       288 |           7 |      248 |          4 |
+| `StructCallback`  | 759.4 ns ±  3%  | 678.5 ns ±  3%     |       304 |           7 |      256 |          4 |
+| geomean           | (all)           | 299.9 ns           |           |             |          |            |
+
+The non-callback rows have wide spreads (±14–36%); the callback rows are
+tight (±3–4%). This is **not** thermal throttling — isolated runs after
+the CPU cooled showed the same shape, just shifted ~10% lower in absolute
+ns. The spread is intrinsic jitter from `runtime.cgocall` on short
+calls: at ~150 ns per op, any goroutine→M migration, OS preemption,
+or `g0` stack-switch cost shows up directly. The callback path takes
+500+ ns per op, so the same jitter averages out into noise.
+
+CGO numbers do not show this — `cgocall` is the same primitive, but
+calling-convention-specific glue in the CGO path is hot-cached after Go
+1.21 and adds less overhead, so per-call variance is smaller.
 
 ## Interpretation
 
@@ -109,11 +127,11 @@ call.
 
 ### Why goffi is fast enough for `wgpu-native`
 
-WebGPU/`wgpu-native` issues O(50) FFI calls per frame at 60 FPS. At ~150
-ns/op that's ~7.5 µs out of a 16.6 ms frame budget — 0.04 %, unmeasurable
-in a profiler. The trade-off is great for that workload; it would be a
-bad choice for code that calls into a math library in a tight loop, where
-CGO's ~30 ns/op is 5× cheaper.
+WebGPU/`wgpu-native` issues O(50) FFI calls per frame at 60 FPS. At
+~150 ns/op (raw goffi) that's ~7.5 µs out of a 16.6 ms frame budget —
+0.04 %, unmeasurable in a profiler. The trade-off is great for that
+workload; it would be a bad choice for code that calls into a math
+library in a tight loop, where CGO's ~30 ns/op is 5× cheaper.
 
 ### Static linking is not supported by goffi
 
@@ -151,5 +169,7 @@ just clean
 * Linux amd64 only — goffi's callback assembly currently targets that
   platform (the rest of the suite is portable, but the numbers here are
   not).
-* Benchmarks were run once; treat absolute numbers as ballpark and rerun
-  with `-count=N` for serious comparisons.
+* The numbers above are from `go test -count=10` aggregated with
+  `benchstat`. Rerunning each suite in isolation (cooler CPU) tightens the
+  goffi spread to ±3–5%; running them back-to-back as `just bench` does
+  shows the wider ranges quoted in the table.
