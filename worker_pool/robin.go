@@ -6,10 +6,11 @@ import (
 )
 
 type RRPool struct {
-	args []chan tsk
-	cap  int64
-	idx  atomic.Int64
-	wg   sync.WaitGroup
+	args    []chan tsk
+	cap     int64
+	idx     atomic.Int64
+	workers sync.WaitGroup
+	pending sync.WaitGroup
 }
 
 func NewRRPool(task func(int, int), cap int64) *RRPool {
@@ -19,10 +20,11 @@ func NewRRPool(task func(int, int), cap int64) *RRPool {
 	}
 
 	for i := range cap {
-		pool.args[i] = make(chan tsk, 1)
-		pool.wg.Go(func() {
+		pool.args[i] = make(chan tsk, cap)
+		pool.workers.Go(func() {
 			for arg := range pool.args[i] {
 				task(arg.Arg, arg.Iter)
+				pool.pending.Done()
 			}
 		})
 	}
@@ -31,16 +33,18 @@ func NewRRPool(task func(int, int), cap int64) *RRPool {
 }
 
 func (p *RRPool) Go(arg, iter int) {
+	p.pending.Add(1)
 	idx := p.idx.Add(1)
 	p.args[idx%p.cap] <- tsk{Arg: arg, Iter: iter}
+}
+
+func (p *RRPool) Drain() {
+	p.pending.Wait()
 }
 
 func (p *RRPool) Release() {
 	for i := range p.cap {
 		close(p.args[i])
 	}
-}
-
-func (p *RRPool) Wait() {
-	p.wg.Wait()
+	p.workers.Wait()
 }

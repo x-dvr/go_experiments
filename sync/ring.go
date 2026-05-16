@@ -8,10 +8,20 @@ import (
 	"sync/atomic"
 )
 
+// RingProducer is a single-producer / single-consumer ring buffer.
+// head and tail are isolated on separate cache lines to avoid producer/
+// consumer false sharing.
+//
+// NOTE: portable Go has no way to align a heap-allocated struct to a
+// cache-line boundary — Go's allocator guarantees 8-byte alignment, not 64.
+// The inter-field padding below ensures head and tail don't share a line
+// with each other, but the struct's leading edge may share a line with
+// whatever heap data precedes it. For an SPSC use case that's fine — only
+// head/tail mutual isolation matters.
 type RingProducer struct {
-	head     atomic.Uint64 // next write position (only producer writes)
+	head     atomic.Uint64
 	_pad0    [56]byte
-	tail     atomic.Uint64 // next read position (only consumer writes)
+	tail     atomic.Uint64
 	_pad1    [56]byte
 	done     atomic.Bool
 	_pad2    [63]byte
