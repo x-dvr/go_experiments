@@ -1,30 +1,4 @@
-# Worker-pool benchmark analysis (v2 — after fixes)
-
-This is the post-fix version of the earlier analysis. The original
-issues — unfair pool lifecycle, pointless cache-line padding, stale
-README numbers, undersized channel buffers — have all been addressed.
-The fixes change the result ranking substantially.
-
-## What changed
-
-1. **All pools are now constructed *outside* `b.Loop()`** and reused
-   across iterations. Each pool grew a `Drain()` method (a per-batch
-   `sync.WaitGroup`) so the benchmark can wait for the current batch
-   to complete without closing the input channel. Per-iter goroutine
-   spawn and `make(chan T, …)` allocations are gone.
-2. **Channel buffers bumped from 1 to `PoolCap`** in `StaticPool` and
-   `RoundRobinPool` so the submitter can fan out a burst of tasks
-   before blocking on a worker.
-3. **`ARRPool` (`arobin.go`) and its benchmark deleted.** The
-   `[56]byte` "cache-line padding" between pointers in the slice did
-   nothing — the contended state lives in the heap-allocated `hchan`,
-   not at the slice element. If you actually want per-channel cache
-   isolation you'd have to roll your own MPMC ring; `make(chan T, N)`
-   doesn't let you control the hchan layout.
-4. **`StaticPool.Wait`, `PreallocPool.Wait`, `RRPool.Wait` removed**
-   in favour of `Drain()` (batch-complete) + `Release()` (final close).
-   The tracer in `worker_pool/tracer/main.go` and the benchmark file
-   were updated to use the new API.
+# Worker-pool benchmark analysis
 
 ## Results
 
@@ -40,11 +14,6 @@ Linux amd64, Go 1.25, aggregated with `benchstat`:
 | `PreallocPool`     |  77.27 ms ± 0%   |   156.3 KiB     | 10,000    | 1 — closure (shared channel) |
 | `StaticPool`       |  79.14 ms ± 1%   |       5.0 B     |    0      | 0 — `tsk` struct, shared channel |
 | `SemaphorePool`    |  79.59 ms ± 1%   |   625.0 KiB     | 30,000    | 3 — closure + sem-send + WG |
-
-The 3.5–5 B/op shown for the zero-alloc pools is bench-framework GC
-overhead attributed to the iteration count; per-task it's zero. All
-the `±` figures here are honest 6-sample confidence intervals from
-benchstat — the `± ∞` from the previous run is gone.
 
 ## Interpretation
 
@@ -133,27 +102,3 @@ semaphore, and registers in the WaitGroup. Three allocs per task,
 (which is structurally similar) mainly because the explicit channel
 send/receive in `Go` is heavier than errgroup's optimised
 `SetLimit` permit path.
-
-## What was *NOT* fixed
-
-- **CPU pinning / `GOMAXPROCS` stability.** The benches still run
-  under whatever the OS scheduler decides. With `-count=6` the
-  confidence intervals are tight (≤2 % for most), so this hasn't
-  bitten us, but if you want to compare across machines, fix
-  `GOMAXPROCS` and use `taskset`.
-- **Tail-task latency.** All numbers here are mean throughput
-  (wall-clock per batch). If you care about p99 task latency,
-  `RoundRobinPool` may lose to `StaticPool` because static dispatch
-  is dynamic load-balancing while RR isn't. The current bench
-  doesn't expose this — every task is the same cost.
-
-## Suggested next experiments
-
-1. Vary `PoolCap` from `NumCPU/2` to `NumCPU*8` and see at what point
-   `RoundRobinPool` stops being the winner. (Hypothesis: at very high
-   `PoolCap`, scheduler load dominates and per-channel contention
-   becomes irrelevant.)
-2. Add a "variable task size" workload (some tasks 10× longer than
-   others) to expose RR's load-imbalance weakness.
-3. Compare against `runtime.LockOSThread()`-pinned workers to see if
-   the scheduler is the bottleneck on the shared-channel variants.
