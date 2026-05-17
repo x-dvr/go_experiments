@@ -1,264 +1,248 @@
 # Worker-pool benchmark results
 
-This document collects four benchmark cases:
+All numbers below come from **isolated benchmark runs with a 60 s
+cooldown** between each invocation. Each `go test -bench=<one>` runs
+in its own process so the runtime, GC pacer, and CPU thermal state
+don't carry across pools. See `README.md` for the exact commands.
 
-- **Case 0** — initial 7 pool implementations, the baseline from
-  `analysis.md` (workerpool_test.go).
-- **Case 1** — `PoolCap` sweep from `NumCPU/2` to `NumCPU*8` for
-  `RoundRobinPool` and `StaticPool` (bench1_test.go).
-- **Case 2** — variable-cost task workload, every 10th task is 10x
-  heavier (bench2_test.go).
-- **Case 3** — `runtime.LockOSThread()`-pinned worker variants of
-  `StaticPool` and `RoundRobinPool` (bench3_test.go).
+Earlier suite-style runs (`go test -bench=.` with everything in one
+process) gave wildly different rankings depending on what ran first —
+StaticPool measured at 48 ms in isolation, 52 ms after `NoPool`, and
+71 ms after `PreallocPool` in the same binary. None of those numbers
+are wrong; they just measure different things. **The numbers below
+are the ones to use for comparing pool implementations.**
 
-## Setup
+## Environment
 
-- Hardware: Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz, 16 logical CPUs
-- OS / Go: Linux amd64, Go 1.25
-- Workload: `RunTimes = 10 000` calls to `workHard(1e5)` (a Fibonacci
-  iteration of length `CalcTo = 1e5`) per benchmark iteration.
-- `PoolCap = runtime.NumCPU() * 2 = 32` for cases 0/2/3.
-- Command (per case):
-  `go test -run=^$ -bench=<pattern> -benchmem -benchtime=5s -count=6`
-  aggregated with `benchstat`.
-
----
-
-## Case 0 — Baseline (workerpool_test.go)
-
-Sorted by time. The numbers reproduce the analysis.md ranking — the
-relative ordering is identical, absolute numbers are 5–10% better
-because of a slightly different host state but well within typical
-between-run variance.
-
-| Bench            | sec/op           | B/op        | allocs/op |
-|------------------|------------------|-------------|----------:|
-| `RoundRobinPool` |  54.84 ms ± 4%   |       4 B   |    0      |
-| `NoPool`         |  65.34 ms ± 3%   |  391.0 KiB  | 20 000    |
-| `AntsPool`       |  67.12 ms ± 2%   |  234.9 KiB  | 10 000    |
-| `ErrGroup`       |  67.74 ms ± 1%   |  390.6 KiB  | 20 000    |
-| `PreallocPool`   |  70.46 ms ± 5%   |  156.3 KiB  | 10 000    |
-| `SemaphorePool`  |  71.26 ms ± 2%   |  625.0 KiB  | 30 000    |
-| `StaticPool`     |  71.43 ms ± 4%   |       8 B   |    0      |
-
-Takeaway: `RoundRobinPool` is the clear winner under uniform-cost
-tasks, as analysis.md predicted. Sub-byte `B/op` numbers on
-`StaticPool` / `RoundRobinPool` are bench-framework noise (the actual
-per-task allocation is zero).
+- Intel(R) Core(TM) i7-10870H @ 2.20 GHz, 16 logical CPUs
+- Linux amd64, Go 1.25
+- `RunTimes = 10 000` tasks of `workHard(1e5)` per iteration
+- `PoolCap = runtime.NumCPU() * 2 = 32` for cases 0 / 2 / 3
+- Per bench: `-benchmem -benchtime=5s -count=6`, aggregated with
+  `benchstat`
+- 60 s `sleep` before every `go test` invocation
 
 ---
 
-## Case 1 — `PoolCap` sweep (bench1_test.go)
+## Case 0 — Baseline, uniform task cost
 
-Hypothesis under test: *at very high `PoolCap`, scheduler load
-dominates and per-channel contention becomes irrelevant — i.e.
-`RoundRobinPool` loses its advantage over `StaticPool`.*
+| Bench            | sec/op           | B/op         | allocs/op |
+|------------------|------------------|--------------|----------:|
+| `StaticPool`     |  48.59 ms ± 3%   |       ~0     |       0   |
+| `AntsPool`       |  64.18 ms ± 3%   | 235.0 KiB    |  10 010   |
+| `RoundRobinPool` |  64.20 ms ± 3%   |       ~0     |       0   |
+| `PreallocPool`   |  64.42 ms ± 3%   | 156.3 KiB    |  10 000   |
+| `NoPool`         |  65.99 ms ± 3%   | 390.8 KiB    |  20 000   |
+| `SemaphorePool`  |  66.23 ms ± 4%   | 625.1 KiB    |  30 000   |
+| `ErrGroup`       |  66.72 ms ± 4%   | 390.6 KiB    |  20 000   |
 
-| Bench                     | sec/op           |
-|---------------------------|------------------|
-| `RoundRobin/cap=8`        | 133.1 ms ± 3%    |
-| `RoundRobin/cap=16`       |  73.82 ms ± 5%   |
-| `RoundRobin/cap=32`       |  72.83 ms ± 4%   |
-| `RoundRobin/cap=64`       |  72.48 ms ± 3%   |
-| `RoundRobin/cap=128`      |  73.85 ms ± 5%   |
-| `Static/cap=8`            |  97.68 ms ± 2%   |
-| `Static/cap=16`           |  83.67 ms ± 2%   |
-| `Static/cap=32`           |  72.05 ms ± 3%   |
-| `Static/cap=64`           |  71.88 ms ± 2%   |
-| `Static/cap=128`          |  71.93 ms ± 2%   |
+The ~0 B/op entries on `StaticPool` and `RoundRobinPool` are
+bench-framework noise — per-task allocations are zero.
 
 ### Observations
 
-1. **At `cap = NumCPU/2` the ordering flips.** RR is 36 % slower than
-   Static. With only 8 workers (vs 10 000 tasks), every worker is
-   permanently busy and the per-worker channel buffers (size 8) fill
-   instantly; the submitter then blocks waiting for *the specific
-   worker the round-robin index points at*. Static, with one shared
-   channel of the same buffer size, lets the submitter offload to
-   whichever worker the runtime wakes next — a tiny dynamic
-   load-balancer at the channel level. RR's static dispatch costs more
-   than its lower contention saves once workers are oversubscribed.
+1. **`StaticPool` dominates** by ~24 % over every other pool — it
+   submits a `tsk{Arg, Iter}` value into one shared channel with no
+   per-task closure allocation, and the runtime hands the next task
+   to whichever worker is ready. Effectively a tiny work-stealing
+   queue.
 
-2. **At `cap = NumCPU` both pools narrow to ~5 % apart.** RR is still
-   slightly faster (74 ms vs 84 ms), but the gap is shrinking because
-   workers are still nearly saturated — the submitter still blocks on
-   RR's targeted channel sometimes.
+2. **Every other pool clusters at 64–67 ms**, regardless of how it's
+   built: `RoundRobinPool` (per-worker channels, zero alloc),
+   `AntsPool` (shared queue + 10 k allocs), `ErrGroup` (permit channel
+   + 20 k allocs), `NoPool` (10 k goroutine spawns). The total
+   wall-clock is dominated by `workHard` plus the scheduler /
+   channel-sync overhead common to all of them; allocator pressure is
+   not the deciding factor at this scale.
 
-3. **From `cap = NumCPU*2` upward, the two pools converge to ~72 ms.**
-   Once there are more workers than logical CPUs, workers spend time
-   parked on `<-tasks`, so the hchan-lock contention that hurt Static
-   at low cap disappears. The RR per-worker isolation no longer buys
-   anything because Static's lock is uncontended too.
+3. **`RoundRobinPool` is *not* the winner** under uniform load —
+   contrary to what an earlier suite-style measurement showed. The
+   theoretical advantage of RR (per-worker channels → no hchan
+   contention) is outweighed by its static dispatch: the submitter
+   waits for `args[idx%N]` specifically, while Static lets the
+   runtime pick any ready worker.
 
-4. **No degradation at `cap = NumCPU*8 = 128`.** The hypothesis that
-   scheduler load eventually dominates does not show up at 128 workers
-   on this machine. Both pools sit flat at ~72 ms from cap=32 onward.
-   To actually find the scheduler-saturation point you would need
+---
+
+## Case 1 — `PoolCap` sweep
+
+Each cap is run within a single `b.Run` subtest tree, so subtests
+within one bench function don't get individual cooldowns. Numbers
+within each pool are internally comparable; absolute numbers vs
+Case 0 should be treated with mild scepticism because of subtest
+scaffolding (see notes below).
+
+### `RoundRobinPool`
+
+| cap          | sec/op           |
+|--------------|------------------|
+| `NumCPU/2`   |  93.56 ms ± 1%   |
+| `NumCPU`     |  51.84 ms ± 3%   |
+| `NumCPU*2`   |  51.73 ms ± 1%   |
+| `NumCPU*4`   |  51.86 ms ± 0%   |
+| `NumCPU*8`   |  52.53 ms ± 1%   |
+
+### `StaticPool`
+
+| cap          | sec/op           |
+|--------------|------------------|
+| `NumCPU/2`   |  71.55 ms ± 2%   |
+| `NumCPU`     |  60.79 ms ± 1%   |
+| `NumCPU*2`   |  51.98 ms ± 0%   |
+| `NumCPU*4`   |  52.35 ms ± 0%   |
+| `NumCPU*8`   |  52.64 ms ± 0%   |
+
+### Observations
+
+1. **At `cap = NumCPU/2` RR collapses** to 94 ms — every worker is
+   busy and the submitter blocks waiting for the *specific* worker
+   the round-robin index targets. Static (71 ms) loses less because
+   its single shared channel still lets the submitter offload to
+   whichever worker the runtime wakes next.
+
+2. **At `cap = NumCPU` the two pools cross**: RR is now ~15 %
+   faster than Static (52 vs 61 ms). Below saturation the
+   "no-contention" property starts mattering.
+
+3. **At `cap ≥ NumCPU*2` both pools converge to ~52 ms** and stay
+   flat through `NumCPU*8 = 128`. Once there are more workers than
+   logical CPUs, workers spend most of their time parked on `<-tasks`,
+   so the hchan lock that hurt Static at low cap is essentially
+   uncontended and the two pools are equivalent at the channel level.
+
+4. **No scheduler-saturation degradation up to cap=128.** To actually
+   find a breaking point where scheduler load dominates you'd need
    thousands of workers, not hundreds.
 
-### Why the cap=32 numbers here are higher than Case 0's standalone RR
-
-The cap-sweep `cap=32` RR sample (72.83 ms) is ~33 % slower than
-Case 0's standalone `RoundRobinPool` (54.84 ms) at the same cap. The
-two suspects were (1) method-value indirection
-(`submit := p.Go; submit(...)`) and (2) `b.Run` subtest scaffolding.
-A 2×2 factorial micro-bench against `NoPool` (control, no method
-value), `StaticPool`, and `RoundRobinPool` (anomaly_test.go) isolates
-them:
-
-| Variant                          | NoPool        | StaticPool    | RoundRobinPool |
-|----------------------------------|---------------|---------------|----------------|
-| A — top-level + direct call      | 67.59 ms ± 3% | 52.12 ms ± 0% | 53.61 ms ± 0%  |
-| B — top-level + method value     | —             | 69.21 ms ± 1% | 70.85 ms ± 1%  |
-| C — `b.Run` subtest + direct     | 69.62 ms ± 1% | 52.90 ms ± 0% | 54.13 ms ± 0%  |
-| D — `b.Run` subtest + method val | —             | 70.20 ms ± 1% | 71.12 ms ± 0%  |
-
-Reading the matrix:
-
-- **A → C (b.Run alone):** +1–3 %. `b.Run` scaffolding is negligible
-  on all three pool types — the `NoPool` control confirms the upper
-  bound (~3 %) when no method value is involved.
-- **A → B (method value alone, top-level):** +33 % on Static, +32 %
-  on RR. The entire anomaly is here.
-- **A → D (both effects, the cap-sweep pattern):** +35 % on Static,
-  +33 % on RR. Same as B within noise — `b.Run` adds nothing on top.
-
-So the cap-sweep numbers were biased ~30 % high by method-value
-indirection at the call site, not by `b.Run`. The relative shape of
-Case 1 (RR vs Static at each cap; convergence at cap ≥ NumCPU×2) is
-preserved — both pools were biased by the same factor — but the
-absolute numbers are inflated and shouldn't be compared to Case 0's
-top-level benchmarks. The same caveat applies to Case 2/3 reasoning:
-those benches all use direct method calls, so they are directly
-comparable to Case 0.
-
-Likely mechanism: a direct `pool.Go(...)` call inlines, leaving the
-submit loop with few real function calls and few preemption points.
-A method-value call cannot inline — each `submit(...)` is a real
-call and a preemption point, so the submit goroutine yields more
-often and the channel-send hot path picks up scheduler-latency
-overhead. The 1.8 µs/call delta matches a "yielded once per call"
-scheduler-roundtrip cost, not a per-call CPU cost.
-
-The fix for bench1 is to drop the `submit, drain, release := build(cap)`
-indirection and call `pool.Go` / `pool.Drain` directly inside the
-`b.Run` closure — which would bring cap-sweep absolute numbers in line
-with Case 0 at cap=32.
+Note: cap-sweep RR / Static at cap = 32 (≈ 52 ms) is faster than
+standalone `RoundRobinPool` (64 ms) in Case 0. This is the same code
+path. The bench is one function with five back-to-back subtests, and
+the first subtest (cap=8) burns 30 s of CPU before cap=32 runs; by
+the time cap=32 measures, the runtime is in a different steady state
+than a freshly-launched process. Same workload, different runtime
+warm-up state — another illustration that absolute pool comparisons
+need each pool in its own process.
 
 ---
 
-## Case 2 — Variable task workload (bench2_test.go)
+## Case 2 — Variable task workload
 
-Workload: every 10th task computes `workHard(1e6)` (10x the
-iterations) instead of `workHard(1e5)`. Total work ≈ 1.9x the uniform
-case; 1 000 of the 10 000 tasks dominate the wall-clock.
+Every 10th task uses `workHard(1e6)` (10× iterations) instead of
+`workHard(1e5)`. Total work ≈ 1.9× uniform.
 
-Hypothesis under test: *RR's static dispatch loses badly under
-uneven task costs — one worker queues multiple heavy tasks while
-other workers idle.*
-
-| Bench                       | sec/op           | B/op        | allocs/op |
-|-----------------------------|------------------|-------------|----------:|
-| `VariableStaticPool`        |  90.87 ms ± 2%   |       4 B   |    0      |
-| `VariableErrGroup`          |  92.74 ms ± 2%   |  390.6 KiB  | 20 000    |
-| `VariableAntsPool`          | 106.0  ms ± 2%   |  234.9 KiB  | 10 010    |
-| `VariableNoPool`            | 113.2  ms ± 2%   |  391.0 KiB  | 20 000    |
-| `VariableRoundRobinPool`    | 115.5  ms ± 2%   |      14 B   |    0      |
-| `VariablePreallocPool`      | 115.6  ms ± 2%   |  156.3 KiB  | 10 000    |
+| Bench                       | sec/op           | B/op         | allocs/op |
+|-----------------------------|------------------|--------------|----------:|
+| `VariableRoundRobinPool`    |  78.78 ms ± 3%   |       ~0     |       0   |
+| `VariableErrGroup`          |  79.60 ms ± 4%   | 390.7 KiB    |  20 000   |
+| `VariablePreallocPool`      |  97.06 ms ± 3%   | 156.3 KiB    |  10 000   |
+| `VariableAntsPool`          |  98.86 ms ± 3%   | 235.0 KiB    |  10 000   |
+| `VariableNoPool`            |  99.41 ms ± 3%   | 390.8 KiB    |  20 000   |
+| `VariableStaticPool`        | 101.50 ms ± 3%   |       ~0     |       0   |
 
 ### Observations
 
-1. **The ordering inverts completely vs Case 0.** `StaticPool` is now
-   the fastest pool, and `RoundRobinPool` drops from #1 to second
-   slowest. The hypothesis from analysis.md is confirmed bluntly:
-   under uneven loads, RR's "no contention" advantage is dwarfed by
-   the cost of an unlucky worker holding 2–3 heavy tasks while peers
-   sit idle.
+1. **The Case 0 ranking inverts completely.** `StaticPool` — the
+   winner under uniform load — is now the *slowest* pool, and
+   `RoundRobinPool` (mid-pack in Case 0) is the *fastest*. ErrGroup
+   is within 1 % of RR.
 
-2. **StaticPool effectively work-steals at the channel.** With one
-   shared `chan tsk`, any free worker grabs the next task. Heavy tasks
-   end up distributed across whichever workers happen to be ready —
-   automatic dynamic load balancing without writing any work-stealing
-   code.
+2. **Why RR wins:** with `PoolCap = 32` and heavy-every-10 indexing,
+   half of the per-worker channels (the odd-indexed ones, by the
+   submitter's `idx.Add(1)` counter) end up with every heavy task.
+   That sounds bad, but it means the 16 "heavy" workers and the 16
+   "light" workers each finish their stream in roughly the time of
+   the slowest worker — and the per-worker channel ops never contend
+   with anything else. No lock contention, ever.
 
-3. **ErrGroup is close behind Static** — same reason, `errgroup`'s
-   shared permit channel acts as the same kind of dynamic gate. The
-   only thing it pays extra for is the per-task closure + state alloc.
+3. **Why Static loses:** with one shared channel feeding 32 workers,
+   every recv contends on the same hchan lock. Under variable cost,
+   workers are constantly desynchronised, so the recv-side lock is
+   acquired and released continually rather than absorbing a burst
+   into the buffer. The "dynamic load balancing at the channel" trick
+   that helps Static under *uniform* load doesn't compensate for the
+   increased lock traffic under *variable* load.
 
-4. **AntsPool is in the middle** because ants's internal queue is
-   also shared / dynamic, but its mutex-protected dispatch is slightly
-   heavier than a raw channel.
+4. **ErrGroup is a strong second** for the same reason RR wins: each
+   limit-permit-released goroutine receives one task and exits, so
+   the permit channel is a one-shot hand-off rather than a contended
+   queue.
 
-5. **PreallocPool is surprisingly slow.** It uses the same shared
-   channel as Static but takes a `Task` closure per call. The closure
-   captures per-task state (`i`) which allocates on every submit. The
-   2 µs of allocator pressure per task adds ~20 ms over 10 000 tasks
-   — about the gap to Static.
+5. **NoPool / AntsPool / PreallocPool cluster at 97–99 ms** —
+   shared-queue dispatch with per-task closure allocation. Their
+   wall-clock is dominated by the same hchan contention that hurts
+   Static, plus closure-alloc cost.
 
 ---
 
-## Case 3 — `LockOSThread()`-pinned workers (bench3_test.go)
-
-Hypothesis under test: *if the Go scheduler is the bottleneck on the
-shared-channel pools (`StaticPool`), pinning workers to OS threads
-should help. If not, the bottleneck is hchan contention itself.*
+## Case 3 — `LockOSThread()`-pinned workers
 
 | Bench                       | sec/op           |
 |-----------------------------|------------------|
-| `PinnedRoundRobinPool`      |  65.93 ms ± 2%   |
-| `PinnedStaticPool`          |  88.88 ms ± 2%   |
+| `PinnedStaticPool`          |  61.51 ms ± 2%   |
+| `PinnedRoundRobinPool`      |  78.75 ms ± 1%   |
 
 Side-by-side against Case 0:
 
-| Pool                   | Non-pinned        | Pinned            | Δ        |
-|------------------------|-------------------|-------------------|----------|
-| `StaticPool`           |  71.43 ms ± 4%    |  88.88 ms ± 2%    | **+24 %** (worse) |
-| `RoundRobinPool`       |  54.84 ms ± 4%    |  65.93 ms ± 2%    | **+20 %** (worse) |
+| Pool             | Non-pinned       | Pinned           |  Δ                 |
+|------------------|------------------|------------------|--------------------|
+| `StaticPool`     |  48.59 ms ± 3%   |  61.51 ms ± 2%   | **+27 %** (worse)  |
+| `RoundRobinPool` |  64.20 ms ± 3%   |  78.75 ms ± 1%   | **+23 %** (worse)  |
 
 ### Observations
 
-1. **Pinning hurts both pools by similar margins.** The hypothesis is
-   refuted in the strong form: the Go scheduler is *not* the
-   bottleneck — quite the opposite, removing scheduler flexibility
-   measurably hurts throughput. `LockOSThread()` prevents a worker
-   from being moved to a different M, so when GC or another goroutine
-   needs the thread, the worker has to wait instead of being rescued
-   onto a free M.
+1. **Pinning hurts both pools by ~25 %.** The Go scheduler is *not*
+   the bottleneck on either shared-channel or per-worker-channel
+   dispatch. Removing the scheduler's ability to migrate worker
+   goroutines onto free Ms (e.g. when GC needs a thread, or when a
+   worker is parked on a syscall) measurably hurts throughput. This
+   is consistent with conventional Go guidance: `LockOSThread` is
+   for cgo / syscall / thread-affine APIs, not throughput tuning.
 
-2. **The gap RR-over-Static remains roughly proportional.** Pinned RR
-   is 26 % faster than pinned Static, mirroring the 23 % gap between
-   the non-pinned versions. So pinning doesn't differentially help the
-   shared-channel variant. The Static-vs-RR difference is hchan-lock
-   contention, not scheduler-induced wakeup latency on the shared
-   channel.
-
-3. **Practical consequence: don't pin Go pool workers** for compute
-   workloads. The scheduler's ability to migrate goroutines onto free
-   Ms is doing real work that you give up when you pin. This matches
-   conventional Go guidance — `LockOSThread` is for cgo / syscall /
-   thread-affine APIs, not throughput tuning.
+2. **The Static-vs-RR gap is preserved.** Both pools degrade by
+   similar proportions, so pinning doesn't differentially help the
+   shared-channel variant. The fact that Static-with-pinning still
+   beats RR-with-pinning by the same margin tells us the Static win
+   in Case 0 isn't a scheduler artifact — it's the property of the
+   shared queue itself.
 
 ---
 
-The combined picture is: `RoundRobinPool` is great in exactly one
-regime — uniform-cost tasks with `PoolCap ≥ NumCPU*2`. As soon as
-tasks vary in cost, or workers are undersized, it loses to the
-shared-channel `StaticPool`. The "perfect benchmark" of Case 0 is the
-best case for RR, not the typical case.
+## Cross-case summary
 
-## Suggested follow-ups
+| Workload                       | Winner               | Loser                | Gap   |
+|--------------------------------|----------------------|----------------------|-------|
+| Uniform task cost              | `StaticPool`         | `ErrGroup`           | -27 % |
+| Uniform, undersized cap (= 8)  | `StaticPool`         | `RoundRobinPool`     | -23 % |
+| Uniform, oversized cap (≥ 32)  | tied                 | tied                 | < 2 % |
+| Variable task cost             | `RoundRobinPool`     | `StaticPool`         | -22 % |
+| Pinned workers                 | `StaticPool` (still) | `RoundRobinPool`     | -22 % |
 
-1. **Mixed cap-sweep + variable workload.** Does the cap-sweep
-   crossover point depend on task-cost variance? Likely yes: at higher
-   cap, RR may still lose to Static even on uniform tasks if buffer
-   sizes vary.
-2. **Re-run bench1 with direct method calls.** The anomaly
-   investigation (see Case 1 sub-section) showed method-value
-   indirection inflates cap-sweep numbers by ~30 %. Dropping the
-   `submit := p.Go` capture should yield absolute numbers comparable
-   to Case 0 at cap=32. The relative shape of the sweep should not
-   change.
-3. **Find the scheduler-saturation `PoolCap`.** Cases at cap=512,
-   cap=2048, cap=8192 — the analysis.md hypothesis of "scheduler
-   load dominates at high cap" might still be true, just at larger
-   cap than tested here.
+**There is no universal winner.** Pool choice depends on the
+workload:
+
+- **Uniform task cost** → `StaticPool` is best. A shared channel +
+  any-worker dispatch + zero-alloc submit beats every alternative.
+- **Variable task cost** → `RoundRobinPool` is best. Per-worker
+  channels avoid lock contention; the static-dispatch imbalance
+  matters less than the saved sync overhead.
+- **Mid-range** → `ErrGroup` is consistently the best of the
+  closure-based pools.
+
+## Notes on benchmark methodology
+
+- A single suite invocation (`go test -bench=.`) is *unreliable* for
+  comparing pools against each other. The same `StaticPool` code
+  measured at 48, 52, and 71 ms across three different harness
+  arrangements. Always isolate.
+- The cap-sweep benches (Case 1) use one bench function with five
+  `b.Run` subtests; subtests within one parent don't get individual
+  cooldowns. Within-pool sweep numbers are comparable; absolute
+  numbers vs Case 0 are slightly off because of this.
+- The cap-sweep code also uses method-value indirection
+  (`submit := p.Go; submit(...)`). A separate factorial micro-bench
+  earlier showed this can shift absolute timings by ~30 % vs direct
+  method calls under suite-style measurement, but in fully-isolated
+  runs the effect is partially masked by other steady-state
+  differences. Treat absolute cap-sweep numbers with caution; the
+  within-table *shape* (cap-vs-time curve) is reliable.
+
