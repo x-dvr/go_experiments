@@ -98,16 +98,52 @@ dominates and per-channel contention becomes irrelevant — i.e.
 
 ### Why the cap=32 numbers here are higher than Case 0's standalone RR
 
-The cap-sweep `cap=32` RR sample (72.83 ms) is noticeably slower than
-Case 0's standalone `RoundRobinPool` (54.84 ms) at the same cap. This
-is the same code path called via a method value
-(`submit := p.Go; submit(...)`) inside a `b.Run` subtest rather than a
-direct method call at the top level. The relative comparisons *within*
-this table remain valid (everything is under the same harness), but
-the absolute cap-sweep numbers shouldn't be compared 1:1 against
-Case 0's top-level benchmarks. Worth a follow-up to understand whether
-this is method-value indirection, subtest scaffolding overhead, or
-something else.
+The cap-sweep `cap=32` RR sample (72.83 ms) is ~33 % slower than
+Case 0's standalone `RoundRobinPool` (54.84 ms) at the same cap. The
+two suspects were (1) method-value indirection
+(`submit := p.Go; submit(...)`) and (2) `b.Run` subtest scaffolding.
+A 2×2 factorial micro-bench against `NoPool` (control, no method
+value), `StaticPool`, and `RoundRobinPool` (anomaly_test.go) isolates
+them:
+
+| Variant                          | NoPool        | StaticPool    | RoundRobinPool |
+|----------------------------------|---------------|---------------|----------------|
+| A — top-level + direct call      | 67.59 ms ± 3% | 52.12 ms ± 0% | 53.61 ms ± 0%  |
+| B — top-level + method value     | —             | 69.21 ms ± 1% | 70.85 ms ± 1%  |
+| C — `b.Run` subtest + direct     | 69.62 ms ± 1% | 52.90 ms ± 0% | 54.13 ms ± 0%  |
+| D — `b.Run` subtest + method val | —             | 70.20 ms ± 1% | 71.12 ms ± 0%  |
+
+Reading the matrix:
+
+- **A → C (b.Run alone):** +1–3 %. `b.Run` scaffolding is negligible
+  on all three pool types — the `NoPool` control confirms the upper
+  bound (~3 %) when no method value is involved.
+- **A → B (method value alone, top-level):** +33 % on Static, +32 %
+  on RR. The entire anomaly is here.
+- **A → D (both effects, the cap-sweep pattern):** +35 % on Static,
+  +33 % on RR. Same as B within noise — `b.Run` adds nothing on top.
+
+So the cap-sweep numbers were biased ~30 % high by method-value
+indirection at the call site, not by `b.Run`. The relative shape of
+Case 1 (RR vs Static at each cap; convergence at cap ≥ NumCPU×2) is
+preserved — both pools were biased by the same factor — but the
+absolute numbers are inflated and shouldn't be compared to Case 0's
+top-level benchmarks. The same caveat applies to Case 2/3 reasoning:
+those benches all use direct method calls, so they are directly
+comparable to Case 0.
+
+Likely mechanism: a direct `pool.Go(...)` call inlines, leaving the
+submit loop with few real function calls and few preemption points.
+A method-value call cannot inline — each `submit(...)` is a real
+call and a preemption point, so the submit goroutine yields more
+often and the channel-send hot path picks up scheduler-latency
+overhead. The 1.8 µs/call delta matches a "yielded once per call"
+scheduler-roundtrip cost, not a per-call CPU cost.
+
+The fix for bench1 is to drop the `submit, drain, release := build(cap)`
+indirection and call `pool.Go` / `pool.Drain` directly inside the
+`b.Run` closure — which would bring cap-sweep absolute numbers in line
+with Case 0 at cap=32.
 
 ---
 
@@ -216,10 +252,12 @@ best case for RR, not the typical case.
    crossover point depend on task-cost variance? Likely yes: at higher
    cap, RR may still lose to Static even on uniform tasks if buffer
    sizes vary.
-2. **Investigate the Case 0 / Case 1 absolute-time gap.** The
-   cap-sweep cap=32 RR is ~33 % slower than the standalone cap=32 RR.
-   Method-value indirection? `b.Run` subtest scaffolding? Worth a
-   diff-against-direct-call micro-bench.
+2. **Re-run bench1 with direct method calls.** The anomaly
+   investigation (see Case 1 sub-section) showed method-value
+   indirection inflates cap-sweep numbers by ~30 %. Dropping the
+   `submit := p.Go` capture should yield absolute numbers comparable
+   to Case 0 at cap=32. The relative shape of the sweep should not
+   change.
 3. **Find the scheduler-saturation `PoolCap`.** Cases at cap=512,
    cap=2048, cap=8192 — the analysis.md hypothesis of "scheduler
    load dominates at high cap" might still be true, just at larger
