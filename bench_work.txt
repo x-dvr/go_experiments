@@ -1,0 +1,48 @@
+goos: linux
+goarch: amd64
+pkg: github.com/x-dvr/go_experiments/worker_pool
+cpu: Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
+BenchmarkNoPool-16            	     188	  63536737 ns/op	  428886 B/op	   20056 allocs/op
+BenchmarkNoPool-16            	     188	  63549397 ns/op	  400100 B/op	   20000 allocs/op
+BenchmarkNoPool-16            	     186	  64647322 ns/op	  400082 B/op	   20000 allocs/op
+BenchmarkNoPool-16            	     181	  66227086 ns/op	  400075 B/op	   20000 allocs/op
+BenchmarkNoPool-16            	     178	  67156932 ns/op	  400055 B/op	   20000 allocs/op
+BenchmarkNoPool-16            	     176	  67786343 ns/op	  400006 B/op	   20000 allocs/op
+BenchmarkErrGroup-16          	     175	  68191525 ns/op	  400006 B/op	   20000 allocs/op
+BenchmarkErrGroup-16          	     175	  68546908 ns/op	  400006 B/op	   20000 allocs/op
+BenchmarkErrGroup-16          	     174	  68841670 ns/op	  400006 B/op	   20000 allocs/op
+BenchmarkErrGroup-16          	     172	  69293762 ns/op	  400008 B/op	   20000 allocs/op
+BenchmarkErrGroup-16          	     172	  69352121 ns/op	  400005 B/op	   20000 allocs/op
+BenchmarkErrGroup-16          	     171	  69595712 ns/op	  400006 B/op	   20000 allocs/op
+BenchmarkAntsPool-16          	     175	  67780562 ns/op	  240875 B/op	   10008 allocs/op
+BenchmarkAntsPool-16          	     177	  67487074 ns/op	  240343 B/op	   10003 allocs/op
+BenchmarkAntsPool-16          	     176	  67863478 ns/op	  240359 B/op	   10003 allocs/op
+BenchmarkAntsPool-16          	     175	  68162412 ns/op	  240482 B/op	   10004 allocs/op
+BenchmarkAntsPool-16          	     175	  68339456 ns/op	  240421 B/op	   10004 allocs/op
+BenchmarkAntsPool-16          	     175	  68272813 ns/op	  240354 B/op	   10003 allocs/op
+BenchmarkSemaphorePool-16     	     166	  71831582 ns/op	  640003 B/op	   30000 allocs/op
+BenchmarkSemaphorePool-16     	     165	  72250780 ns/op	  640003 B/op	   30000 allocs/op
+BenchmarkSemaphorePool-16     	     165	  72204664 ns/op	  640003 B/op	   30000 allocs/op
+BenchmarkSemaphorePool-16     	     165	  72399466 ns/op	  640003 B/op	   30000 allocs/op
+BenchmarkSemaphorePool-16     	     164	  72600368 ns/op	  640003 B/op	   30000 allocs/op
+BenchmarkSemaphorePool-16     	     164	  72749505 ns/op	  640003 B/op	   30000 allocs/op
+BenchmarkPreallocPool-16      	     172	  69420701 ns/op	  160003 B/op	   10000 allocs/op
+BenchmarkPreallocPool-16      	     171	  69544864 ns/op	  160003 B/op	   10000 allocs/op
+BenchmarkPreallocPool-16      	     171	  69548852 ns/op	  160003 B/op	   10000 allocs/op
+BenchmarkPreallocPool-16      	     171	  69681630 ns/op	  160003 B/op	   10000 allocs/op
+BenchmarkPreallocPool-16      	     170	  70288444 ns/op	  160003 B/op	   10000 allocs/op
+BenchmarkPreallocPool-16      	     171	  69890577 ns/op	  160004 B/op	   10000 allocs/op
+BenchmarkStaticPool-16        	     170	  70414096 ns/op	       3 B/op	       0 allocs/op
+BenchmarkStaticPool-16        	     169	  70535794 ns/op	       3 B/op	       0 allocs/op
+BenchmarkStaticPool-16        	     169	  70724958 ns/op	      16 B/op	       0 allocs/op
+BenchmarkStaticPool-16        	     169	  70741354 ns/op	       3 B/op	       0 allocs/op
+BenchmarkStaticPool-16        	     169	  70880907 ns/op	       3 B/op	       0 allocs/op
+BenchmarkStaticPool-16        	     169	  70838348 ns/op	       4 B/op	       0 allocs/op
+BenchmarkRoundRobinPool-16    	     220	  54181505 ns/op	       3 B/op	       0 allocs/op
+BenchmarkRoundRobinPool-16    	     220	  54474444 ns/op	       2 B/op	       0 allocs/op
+BenchmarkRoundRobinPool-16    	     220	  54221958 ns/op	       3 B/op	       0 allocs/op
+BenchmarkRoundRobinPool-16    	     220	  54331062 ns/op	       2 B/op	       0 allocs/op
+BenchmarkRoundRobinPool-16    	     220	  54282483 ns/op	       3 B/op	       0 allocs/op
+BenchmarkRoundRobinPool-16    	     220	  54309830 ns/op	       2 B/op	       0 allocs/op
+PASS
+ok  	github.com/x-dvr/go_experiments/worker_pool	501.610s
