@@ -246,3 +246,15 @@ workload:
   differences. Treat absolute cap-sweep numbers with caution; the
   within-table *shape* (cap-vs-time curve) is reliable.
 
+---
+
+## Appendix: runtime/trace analysis
+
+See [trace.md](trace.md) for a detailed walk-through of
+`runtime/trace` profiles for `NoPool`, `RoundRobinPool`, and
+`StaticPool` on the uniform workload. The short version: the trace
+data explains the Case 0 ranking essentially exactly — `Static`
+wins because its workers are 3× less idle than `RR`'s, the feared
+`hchan` lock contention on `Static` is < 1 ms total over 10 000 sends,
+and `NoPool`'s real cost is 5.77 s of cumulative `asyncPreempt`
+scheduler delay from running 10 k preemptible CPU-bound goroutines.

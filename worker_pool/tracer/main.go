@@ -21,16 +21,28 @@ var (
 )
 
 func main() {
-	err := traceFn("no", noPool)
-	if err != nil {
-		panic(err)
+	pools := map[string]func(){
+		"no": noPool,
+		"rr": robinPool,
+		"st": staticPool,
 	}
-	err = traceFn("rr", robinPool)
-	if err != nil {
-		panic(err)
+	which := "all"
+	if len(os.Args) > 1 {
+		which = os.Args[1]
 	}
-	err = traceFn("st", staticPool)
-	if err != nil {
+	if which == "all" {
+		for name, fn := range pools {
+			if err := traceFn(name, fn); err != nil {
+				panic(err)
+			}
+		}
+		return
+	}
+	fn, ok := pools[which]
+	if !ok {
+		panic("unknown pool: " + which)
+	}
+	if err := traceFn(which, fn); err != nil {
 		panic(err)
 	}
 }
