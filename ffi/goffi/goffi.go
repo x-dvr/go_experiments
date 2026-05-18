@@ -34,11 +34,11 @@ var pointTypeDescriptor = &types.TypeDescriptor{
 var (
 	libHandle unsafe.Pointer
 
-	addIntsSym, strlenSym, sumBytesSym, pointAddSym         unsafe.Pointer
-	callIntCbSym, callStructCbSym                           unsafe.Pointer
-	addIntsCIF, strlenCIF, sumBytesCIF, pointAddCIF         types.CallInterface
-	callIntCbCIF, callStructCbCIF                           types.CallInterface
-	intCallbackPtr, structCallbackPtr                       uintptr
+	addIntsSym, strlenSym, sumBytesSym, pointAddSym unsafe.Pointer
+	callIntCbSym, callStructCbSym                   unsafe.Pointer
+	addIntsCIF, strlenCIF, sumBytesCIF, pointAddCIF types.CallInterface
+	callIntCbCIF, callStructCbCIF                   types.CallInterface
+	intCallbackPtr, structCallbackPtr               uintptr
 )
 
 func libraryPath() string {
