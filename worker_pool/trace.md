@@ -167,9 +167,9 @@ Dropped 1 node (cum <= 1.85ms)
   354.13ms 95.71% 95.71%   354.13ms 95.71%  runtime.chanrecv2
    13.75ms  3.72% 99.42%    13.75ms  3.72%  runtime.chansend1
     2.13ms  0.58%   100%     2.13ms  0.58%  sync.(*WaitGroup).Wait
-         0     0%   100%     2.13ms  0.58%  github.com/x-dvr/go_experiments/worker_pool.(*RRPool).Drain
-         0     0%   100%    13.75ms  3.72%  github.com/x-dvr/go_experiments/worker_pool.(*RRPool).Go
-         0     0%   100%   354.13ms 95.71%  github.com/x-dvr/go_experiments/worker_pool.NewRRPool.func1
+         0     0%   100%     2.13ms  0.58%  github.com/0xde86/go_experiments/worker_pool.(*RRPool).Drain
+         0     0%   100%    13.75ms  3.72%  github.com/0xde86/go_experiments/worker_pool.(*RRPool).Go
+         0     0%   100%   354.13ms 95.71%  github.com/0xde86/go_experiments/worker_pool.NewRRPool.func1
          0     0%   100%    15.88ms  4.29%  main.main
          0     0%   100%    15.88ms  4.29%  main.robinPool
          0     0%   100%    15.88ms  4.29%  main.traceFn
@@ -208,8 +208,8 @@ Dropped 4 nodes (cum <= 3.32ms)
       flat  flat%   sum%        cum   cum%
   615.74ms 92.67% 92.67%   615.74ms 92.67%  runtime.chansend1
    48.52ms  7.30%   100%    48.52ms  7.30%  runtime.chanrecv2
-         0     0%   100%   615.74ms 92.67%  github.com/x-dvr/go_experiments/worker_pool.(*RRPool).Go
-         0     0%   100%    48.52ms  7.30%  github.com/x-dvr/go_experiments/worker_pool.NewRRPool.func1
+         0     0%   100%   615.74ms 92.67%  github.com/0xde86/go_experiments/worker_pool.(*RRPool).Go
+         0     0%   100%    48.52ms  7.30%  github.com/0xde86/go_experiments/worker_pool.NewRRPool.func1
          0     0%   100%   615.91ms 92.70%  main.main
          0     0%   100%   615.91ms 92.70%  main.robinPool
          0     0%   100%   615.91ms 92.70%  main.traceFn
@@ -247,8 +247,8 @@ Dropped 3 nodes (cum <= 0.61ms)
       flat  flat%   sum%        cum   cum%
   121.55ms 98.86% 98.86%   121.55ms 98.86%  runtime.chanrecv2
     1.15ms  0.94% 99.80%     1.15ms  0.94%  runtime.chansend1
-         0     0% 99.80%     1.15ms  0.94%  github.com/x-dvr/go_experiments/worker_pool.(*StaticPool).Go
-         0     0% 99.80%   121.55ms 98.86%  github.com/x-dvr/go_experiments/worker_pool.NewStaticPool.func1
+         0     0% 99.80%     1.15ms  0.94%  github.com/0xde86/go_experiments/worker_pool.(*StaticPool).Go
+         0     0% 99.80%   121.55ms 98.86%  github.com/0xde86/go_experiments/worker_pool.NewStaticPool.func1
          0     0% 99.80%     1.40ms  1.14%  main.main
          0     0% 99.80%     1.40ms  1.14%  main.staticPool
          0     0% 99.80%     1.40ms  1.14%  main.traceFn
@@ -285,8 +285,8 @@ Dropped 4 nodes (cum <= 3.80ms)
       flat  flat%   sum%        cum   cum%
   712.66ms 93.67% 93.67%   712.66ms 93.67%  runtime.chansend1
    47.83ms  6.29%   100%    47.83ms  6.29%  runtime.chanrecv2
-         0     0%   100%   712.66ms 93.67%  github.com/x-dvr/go_experiments/worker_pool.(*StaticPool).Go
-         0     0%   100%    47.83ms  6.29%  github.com/x-dvr/go_experiments/worker_pool.NewStaticPool.func1
+         0     0%   100%   712.66ms 93.67%  github.com/0xde86/go_experiments/worker_pool.(*StaticPool).Go
+         0     0%   100%    47.83ms  6.29%  github.com/0xde86/go_experiments/worker_pool.NewStaticPool.func1
          0     0%   100%   712.97ms 93.71%  main.main
          0     0%   100%   712.97ms 93.71%  main.staticPool
          0     0%   100%   712.97ms 93.71%  main.traceFn

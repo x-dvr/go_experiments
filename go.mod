@@ -1,4 +1,4 @@
-module github.com/x-dvr/go_experiments
+module github.com/0xde86/go_experiments
 
 go 1.25
 

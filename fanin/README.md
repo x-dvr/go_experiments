@@ -1,6 +1,6 @@
 # Experiment with different fan-in implementations
 
-More details [here](https://x-dvr.github.io/dev-blog/posts/compare-fan-in/)
+More details [here](https://0xde86.github.io/dev-blog/posts/compare-fan-in/)
 
 Run benchmarks:
 ```sh
@@ -25,7 +25,7 @@ perf stat go test -bench=^BenchmarkWorkerPoolLoop$ -benchtime=10s ./fanin
 ```
 goos: linux
 goarch: amd64
-pkg: github.com/x-dvr/go_experiments/fanin
+pkg: github.com/0xde86/go_experiments/fanin
 cpu: Intel(R) Core(TM) i7-10870H CPU @ 2.20GHz
 BenchmarkWorkerPoolCanonical-16                    33226             35925 ns/op             780 B/op         16 allocs/op
 BenchmarkWorkerPoolReflect-16                       4495            246157 ns/op          174897 B/op       3216 allocs/op
