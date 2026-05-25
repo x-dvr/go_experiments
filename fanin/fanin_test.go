@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/x-dvr/go_experiments/fanin"
+	"github.com/0xde86/go_experiments/fanin"
 )
 
 func TestCanonical(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"golang.org/x/sync/errgroup"
 
-	workerpool "github.com/x-dvr/go_experiments/worker_pool"
+	workerpool "github.com/0xde86/go_experiments/worker_pool"
 )
 
 const (

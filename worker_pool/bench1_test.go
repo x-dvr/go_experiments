@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	workerpool "github.com/x-dvr/go_experiments/worker_pool"
+	workerpool "github.com/0xde86/go_experiments/worker_pool"
 )
 
 // Bench 1 (from analysis.md "Suggested next experiments"):

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	workerpool "github.com/x-dvr/go_experiments/worker_pool"
+	workerpool "github.com/0xde86/go_experiments/worker_pool"
 )
 
 // Investigates why CapSweepRoundRobin/cap=32 (~72 ms) is ~33% slower

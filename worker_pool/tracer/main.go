@@ -7,7 +7,7 @@ import (
 	"runtime/trace"
 	"sync"
 
-	workerpool "github.com/x-dvr/go_experiments/worker_pool"
+	workerpool "github.com/0xde86/go_experiments/worker_pool"
 )
 
 const (

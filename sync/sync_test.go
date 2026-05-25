@@ -3,7 +3,7 @@ package sync_test
 import (
 	"testing"
 
-	"github.com/x-dvr/go_experiments/sync"
+	"github.com/0xde86/go_experiments/sync"
 )
 
 const cnt = 1_000
